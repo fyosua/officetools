@@ -19,9 +19,14 @@
     { id: 'pdf-editor', name: 'PDF EDITOR', icon: '🖊️', description: 'Add annotations', acceptFiles: true },
   ]);
 
-  async function handleToolRun(toolId, input) {
+  async function handleToolRun(toolId, files) {
     const formData = new FormData();
-    formData.append('input', input);
+    if (files && files.length) {
+      for (const f of files) {
+        formData.append('file', f);
+      }
+    }
+    formData.append('input', files.map(f => f.name).join(', '));
     return await processFile(`/api/${toolId}`, formData);
   }
 

@@ -43,7 +43,7 @@
     running = true;
     result = null;
     try {
-      const res = await onRun(tool.id, input);
+      const res = await onRun(tool.id, files);
       result = { ok: true, data: res };
     } catch (err) {
       result = { ok: false, data: err.message };
