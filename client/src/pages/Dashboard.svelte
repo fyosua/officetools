@@ -33,7 +33,7 @@
   ];
 
   async function doLogout() { await logout(); onLogout(); }
-  let collapsed = $state({});
+  let collapsed = $state(Object.fromEntries(groups.map((g) => [g.name, true])));
   function toggle(name) { collapsed = { ...collapsed, [name]: !collapsed[name] }; }
 </script>
 
