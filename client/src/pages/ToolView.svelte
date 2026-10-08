@@ -4,6 +4,7 @@
   import { processFile } from '../lib/api.js';
   import PageViewer from '../components/PageViewer.svelte';
   import Organizer from '../components/Organizer.svelte';
+  import PdfEditor from '../components/PdfEditor.svelte';
 
   let files = $state([]);
   let dragOver = $state(false);
@@ -31,7 +32,7 @@
     unlock: { label: 'Upload a password-protected PDF', accept: '.pdf', multiple: false, display: 'grid', params: [{ key: 'password', label: 'Document password', placeholder: 'Enter password' }] },
     protect: { label: 'Upload a PDF to protect', accept: '.pdf', multiple: false, display: 'grid', params: [{ key: 'password', label: 'New password', placeholder: 'Set a password' }] },
     'pdf-to-text': { label: 'Upload a PDF to extract text', accept: '.pdf', multiple: false, display: 'grid', params: [] },
-    'pdf-editor': { label: 'Upload a PDF to edit', accept: '.pdf', multiple: false, display: 'grid', params: [{ key: 'text', label: 'Text to add', placeholder: 'Enter annotation text' }] },
+    'pdf-editor': { label: 'Annotate: add text, highlight, draw, sign', accept: '.pdf', multiple: false, display: 'editor', params: [] },
   };
 
   let cfg = configs[tool.id] || configs['merge'];
@@ -45,9 +46,10 @@
   let rotations = $state({});        // pageNum1based -> cumulative angle (rotate viewer)
   let rotateCur = $state(0);         // current page index in the rotate viewer
   let orgItems = $state([]);         // organize: [{src,rot}] final page list
+  let annos = $state([]);            // pdf editor annotations
 
   async function loadPreview() {
-    pageImages = []; selectedPages = []; rotations = {}; rotateCur = 0; orgItems = [];
+    pageImages = []; selectedPages = []; rotations = {}; rotateCur = 0; orgItems = []; annos = [];
     if (!cfg.display || files.length !== 1) return;
     const ext = (files[0].name.split('.').pop() || '').toLowerCase();
     if (ext !== 'pdf') return;
@@ -90,7 +92,7 @@
     const s = [...(e.target?.files || [])];
     if (s.length) { files = s; loadPreview(); }
   }
-  function clearFiles() { files = []; result = null; error = ''; pageImages = []; selectedPages = []; rotations = {}; rotateCur = 0; parts = []; curPart = 0; dragIdx = null; orgItems = []; }
+  function clearFiles() { files = []; result = null; error = ''; pageImages = []; selectedPages = []; rotations = {}; rotateCur = 0; parts = []; curPart = 0; dragIdx = null; orgItems = []; annos = []; }
 
   // --- Merge: drag-drop to reorder the merged files (which file is first) ---
   let dragIdx = $state(null);
@@ -123,6 +125,20 @@
 
   async function handleProcess() {
     if (!files.length) { error = 'Please select a file first'; return; }
+    // PDF Editor: send annotation spec to /api/annotate
+    if (cfg.display === 'editor') {
+      if (!annos.length) { error = 'Add at least one annotation (text / highlight / draw / sign) first'; return; }
+      running = true; error = ''; result = null;
+      try {
+        const fd = new FormData();
+        for (const f of files) fd.append('file', f);
+        fd.append('spec', JSON.stringify(annos.map((a) => ({ ...a }))));
+        const res = await processFile('/api/annotate', fd);
+        result = res;
+      } catch (err) { error = err.message; }
+      finally { running = false; }
+      return;
+    }
     // Organize: send final page order + per-page rotation spec "src:rot,..."
     if (tool.id === 'organize') {
       if (!orgItems.length) { error = 'No pages to organize'; return; }
@@ -294,8 +310,11 @@
           </div>
         {/if}
 
+        <!-- Preview: PDF editor canvas (annotate) -->
+        {#if cfg.display === 'editor' && pageImages.length}
+          <PdfEditor images={pageImages} bind:annos apply={handleProcess} />
         <!-- Preview: organize pages (drag reorder / rotate / duplicate / delete) -->
-        {#if cfg.display === 'organize' && pageImages.length}
+        {:else if cfg.display === 'organize' && pageImages.length}
           <Organizer images={pageImages} bind:items={orgItems} />
         <!-- Preview: full-size single-page viewer (rotate) -->
         {:else if cfg.display === 'viewer' && pageImages.length}

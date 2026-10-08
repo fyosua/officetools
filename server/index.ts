@@ -25,6 +25,7 @@ import { watermark_pdf } from "./tools/watermark";
 import { number_pages } from "./tools/number_pages";
 import { crop_pdf } from "./tools/crop_pdf";
 import { organize_pdf } from "./tools/organize_pdf";
+import { annotate_pdf } from "./tools/annotate_pdf";
 
 const config = loadConfig();
 const resultsDir = `${config.processingDir}/results`;
@@ -233,6 +234,13 @@ const app = new Elysia()
     const path = await saveUploadedFile(fd, "file");
     const text = (fd.get("text") as string) || "";
     return { url: resultUrl(await add_text_annotation(path, text, 1, 50, 50)) };
+  })
+  .post("/api/annotate", async ({ request, cookie, set }: any) => {
+    requireAuth({ cookie, set });
+    const fd = await request.formData();
+    const path = await saveUploadedFile(fd, "file");
+    const spec = (fd.get("spec") as string) || "[]";
+    return { url: resultUrl(await annotate_pdf(path, spec)) };
   })
   // --- Static ---
   .use(staticPlugin({ assets: "./client/dist", prefix: "/" }))
