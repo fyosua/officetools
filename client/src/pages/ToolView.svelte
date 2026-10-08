@@ -12,51 +12,88 @@
 
   const configs = {
     merge: { label: 'Upload multiple PDFs to merge', accept: '.pdf', multiple: true, params: [] },
-    split: { label: 'Upload a PDF to split', accept: '.pdf', multiple: false, params: [{ key: 'mode', label: 'Split mode', options: ['split', 'extract', 'perpage'] }, { key: 'pages', label: 'Pages (e.g. 1-3,5,7-9)', placeholder: '1-999' }] },
-    compress: { label: 'Upload a PDF to compress', accept: '.pdf', multiple: false, params: [{ key: 'mode', label: 'Compression mode', placeholder: 'ebook (lossy)', options: ['ebook', 'screen', 'printer', 'prepress'] }] },
-    'pdf-to-jpg': { label: 'Upload a PDF to convert to images', accept: '.pdf', multiple: false, params: [{ key: 'dpi', label: 'Resolution (DPI)', placeholder: '150' }] },
-    'pdf-to-png': { label: 'Upload a PDF to convert to PNG', accept: '.pdf', multiple: false, params: [{ key: 'dpi', label: 'Resolution (DPI)', placeholder: '150' }] },
-    'delete-pages': { label: 'Upload a PDF to delete pages', accept: '.pdf', multiple: false, params: [{ key: 'pages', label: 'Pages to delete (e.g. 2,5)', placeholder: '2' }] },
+    split: { label: 'Upload a PDF to split', accept: '.pdf', multiple: false, pagePreview: true, pageSelect: true, params: [{ key: 'mode', label: 'Split mode', options: ['split', 'extract', 'perpage'] }] },
+    compress: { label: 'Upload a PDF to compress', accept: '.pdf', multiple: false, pagePreview: true, params: [{ key: 'mode', label: 'Compression mode', placeholder: 'ebook (lossy)', options: ['ebook', 'screen', 'printer', 'prepress'] }] },
+    'pdf-to-jpg': { label: 'Upload a PDF to convert to images', accept: '.pdf', multiple: false, pagePreview: true, params: [{ key: 'dpi', label: 'Resolution (DPI)', placeholder: '150' }] },
+    'pdf-to-png': { label: 'Upload a PDF to convert to PNG', accept: '.pdf', multiple: false, pagePreview: true, params: [{ key: 'dpi', label: 'Resolution (DPI)', placeholder: '150' }] },
+    'delete-pages': { label: 'Upload a PDF, then click the pages to delete', accept: '.pdf', multiple: false, pagePreview: true, pageSelect: true, params: [] },
     'office-to-pdf': { label: 'Upload an Office file to convert to PDF', accept: '.docx,.xlsx,.pptx,.odt,.ods,.odp', multiple: false, params: [] },
-    watermark: { label: 'Upload a PDF to watermark', accept: '.pdf', multiple: false, params: [{ key: 'text', label: 'Watermark text', placeholder: 'CONFIDENTIAL' }] },
-    'number-pages': { label: 'Upload a PDF to number pages', accept: '.pdf', multiple: false, params: [{ key: 'start', label: 'Start number', placeholder: '1' }] },
-    crop: { label: 'Upload a PDF to crop', accept: '.pdf', multiple: false, params: [{ key: 'margin', label: 'Crop % per side', placeholder: '10' }] },
-    'jpg-to-pdf': { label: 'Upload images to convert to PDF', accept: '.jpg,.jpeg,.png', multiple: true, params: [] },
+    watermark: { label: 'Upload a PDF to watermark', accept: '.pdf', multiple: false, pagePreview: true, params: [{ key: 'text', label: 'Watermark text', placeholder: 'CONFIDENTIAL' }] },
+    'number-pages': { label: 'Upload a PDF to number pages', accept: '.pdf', multiple: false, pagePreview: true, params: [{ key: 'start', label: 'Start number', placeholder: '1' }] },
+    crop: { label: 'Upload a PDF to crop', accept: '.pdf', multiple: false, pagePreview: true, params: [{ key: 'margin', label: 'Crop % per side', placeholder: '10' }] },
+    'jpg-to-pdf': { label: 'Upload images to convert to PDF', accept: '.jpg,.jpeg,.png', multiple: true, params: [{ key: 'margin', label: 'Margin (points)', placeholder: '0' }, { key: 'orientation', label: 'Orientation', options: ['auto', 'portrait', 'landscape'] }, { key: 'size', label: 'Page size', options: ['auto', 'a4', 'letter'] }] },
     'docx-to-pdf': { label: 'Upload a Word document to convert', accept: '.docx', multiple: false, params: [] },
-    'pdf-to-docx': { label: 'Upload a PDF to convert to Word', accept: '.pdf', multiple: false, params: [] },
-    rotate: { label: 'Upload a PDF to rotate', accept: '.pdf', multiple: false, params: [{ key: 'angle', label: 'Rotation angle', placeholder: '90', options: ['90', '180', '270'] }] },
-    unlock: { label: 'Upload a password-protected PDF', accept: '.pdf', multiple: false, params: [{ key: 'password', label: 'Document password', placeholder: 'Enter password' }] },
-    protect: { label: 'Upload a PDF to protect', accept: '.pdf', multiple: false, params: [{ key: 'password', label: 'New password', placeholder: 'Set a password' }] },
-    'pdf-to-text': { label: 'Upload a PDF to extract text', accept: '.pdf', multiple: false, params: [] },
-    'pdf-editor': { label: 'Upload a PDF to edit', accept: '.pdf', multiple: false, params: [{ key: 'text', label: 'Text to add', placeholder: 'Enter annotation text' }] },
+    'pdf-to-docx': { label: 'Upload a PDF to convert to Word', accept: '.pdf', multiple: false, pagePreview: true, params: [] },
+    rotate: { label: 'Upload a PDF, then click the pages to rotate', accept: '.pdf', multiple: false, pagePreview: true, pageSelect: true, params: [{ key: 'angle', label: 'Rotation angle', placeholder: '90', options: ['90', '180', '270'] }] },
+    unlock: { label: 'Upload a password-protected PDF', accept: '.pdf', multiple: false, pagePreview: true, params: [{ key: 'password', label: 'Document password', placeholder: 'Enter password' }] },
+    protect: { label: 'Upload a PDF to protect', accept: '.pdf', multiple: false, pagePreview: true, params: [{ key: 'password', label: 'New password', placeholder: 'Set a password' }] },
+    'pdf-to-text': { label: 'Upload a PDF to extract text', accept: '.pdf', multiple: false, pagePreview: true, params: [] },
+    'pdf-editor': { label: 'Upload a PDF to edit', accept: '.pdf', multiple: false, pagePreview: true, params: [{ key: 'text', label: 'Text to add', placeholder: 'Enter annotation text' }] },
   };
 
   let cfg = configs[tool.id] || configs['merge'];
   let params = $state({});
+
+  // Page preview + selection (Smallpdf-style thumbnails)
+  let pageImages = $state([]);       // /api/pdf-to-png urls, one per page
+  let selectedPages = $state([]);    // 1-based page numbers the user clicked (when pageSelect)
+  let previewLoading = $state(false);
+
+  async function loadPreview() {
+    pageImages = []; selectedPages = [];
+    if (!cfg.pagePreview || files.length !== 1) return;
+    const ext = (files[0].name.split('.').pop() || '').toLowerCase();
+    if (ext !== 'pdf') return;
+    previewLoading = true;
+    try {
+      const fd = new FormData();
+      fd.append('file', files[0]);
+      fd.append('dpi', '90');
+      const res = await processFile('/api/pdf-to-png', fd);
+      pageImages = res.urls || [];
+    } catch (e) {
+      pageImages = []; // preview is optional; tool still works
+    } finally {
+      previewLoading = false;
+    }
+  }
+  function togglePage(p) {
+    if (!cfg.pageSelect) return;
+    selectedPages = selectedPages.includes(p)
+      ? selectedPages.filter((x) => x !== p)
+      : [...selectedPages, p].sort((a, b) => a - b);
+  }
 
   function onDragOver(e) { e.preventDefault(); dragOver = true; }
   function onDragLeave() { dragOver = false; }
   function onDrop(e) {
     e.preventDefault(); dragOver = false;
     const dropped = [...e.dataTransfer.files];
-    if (dropped.length) files = dropped;
+    if (dropped.length) { files = dropped; loadPreview(); }
   }
   function onFilePick() { fileInput?.click(); }
   function onFileSelected(e) {
     const s = [...(e.target?.files || [])];
-    if (s.length) files = s;
+    if (s.length) { files = s; loadPreview(); }
   }
-  function clearFiles() { files = []; result = null; error = ''; }
+  function clearFiles() { files = []; result = null; error = ''; pageImages = []; selectedPages = []; }
 
   async function handleProcess() {
     if (!files.length) { error = 'Please select a file first'; return; }
+    // Page selection drives the pages param (delete/split/rotate)
+    if (cfg.pageSelect) {
+      if (!selectedPages.length) {
+        if (tool.id === 'delete-pages') { error = 'Click the page(s) you want to delete first'; return; }
+      }
+    }
     running = true; error = ''; result = null;
     try {
       const fd = new FormData();
       for (const f of files) fd.append('file', f);
+      if (cfg.pageSelect && selectedPages.length) fd.append('pages', selectedPages.join(','));
       for (const p of cfg.params) {
-        const val = params[p.key] || p.placeholder || '';
-        fd.append(p.key, val);
+        const val = params[p.key] || (p.options ? '' : p.placeholder) || '';
+        if (val) fd.append(p.key, val);
       }
       const res = await processFile(`/api/${tool.id}`, fd);
       result = res;
@@ -122,6 +159,32 @@
       </div>
 
       {#if files.length}
+        <!-- Page preview (Smallpdf-style thumbnails) -->
+        {#if cfg.pagePreview && (pageImages.length || previewLoading)}
+          <div class="preview-section">
+            <div class="preview-label">
+              {#if cfg.pageSelect}
+                <strong>{selectedPages.length || 0} selected</strong> · click pages to select
+              {:else}
+                <strong>{pageImages.length} page(s)</strong>
+              {/if}
+              {#if previewLoading}<span class="preview-loading">…loading preview</span>{/if}
+            </div>
+            <div class="thumb-grid">
+              {#each pageImages as url, i}
+                <button type="button"
+                  class:thumb-selected={selectedPages.includes(i + 1)}
+                  class:thumb-clickable={cfg.pageSelect}
+                  onclick={() => togglePage(i + 1)}>
+                  <img src={url} alt="Page {i + 1}" loading="lazy" />
+                  <span class="thumb-label">{i + 1}</span>
+                  {#if selectedPages.includes(i + 1)}<span class="thumb-check">✓</span>{/if}
+                </button>
+              {/each}
+            </div>
+          </div>
+        {/if}
+
         <!-- Step 2: Options -->
         {#if cfg.params.length}
           <div class="params-section">
@@ -226,4 +289,30 @@
   }
   .action-btn.primary { background: rgba(0,255,245,0.1); border-color: var(--neon-cyan); }
   .action-btn:hover { background: rgba(0,255,245,0.2); box-shadow: 0 0 15px rgba(0,255,245,0.2); }
+
+  /* Page preview thumbnails (Smallpdf-style) */
+  .preview-section { width: 100%; margin-top: 1.5rem; }
+  .preview-label { font-size: 0.7rem; color: var(--neon-cyan); letter-spacing: 0.05em; margin-bottom: 0.6rem; }
+  .preview-loading { opacity: 0.7; font-size: 0.65rem; margin-left: 0.5rem; }
+  .thumb-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 0.6rem; width: 100%;
+  }
+  .thumb-grid button {
+    position: relative; padding: 0; margin: 0; border: 2px solid rgba(0,255,245,0.22);
+    background: rgba(0,0,0,0.3); cursor: default; overflow: hidden; border-radius: 4px;
+  }
+  .thumb-grid button.thumb-clickable { cursor: pointer; }
+  .thumb-grid button.thumb-clickable:hover { border-color: var(--neon-cyan); }
+  .thumb-grid button.thumb-selected {
+    border-color: var(--neon-magenta); box-shadow: 0 0 10px rgba(255,0,255,0.4);
+  }
+  .thumb-grid img { width: 100%; display: block; }
+  .thumb-label {
+    position: absolute; top: 4px; left: 6px; font-size: 0.62rem;
+    background: rgba(0,0,0,0.6); color: #fff; padding: 1px 5px; border-radius: 3px;
+  }
+  .thumb-check {
+    position: absolute; top: 4px; right: 6px; font-size: 0.85rem; color: #00ff00; font-weight: bold;
+    text-shadow: 0 0 4px rgba(0,0,0,0.8);
+  }
 </style>
