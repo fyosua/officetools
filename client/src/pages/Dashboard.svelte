@@ -17,6 +17,7 @@
     { id: 'pdf-to-text', name: 'PDF TO TEXT', icon: '📃', desc: 'Extract text from PDF' },
     { id: 'pdf-editor', name: 'PDF EDITOR', icon: '🖊️', desc: 'Add text annotations' },
     { id: 'delete-pages', name: 'DELETE PAGES', icon: '🗑️', desc: 'Remove pages from a PDF' },
+    { id: 'organize', name: 'ORGANIZE', icon: '🧲', desc: 'Reorder, rotate, duplicate, delete pages' },
     { id: 'office-to-pdf', name: 'OFFICE TO PDF', icon: '📊', desc: 'Convert Excel/PPT/OpenOffice to PDF' },
     { id: 'watermark', name: 'WATERMARK', icon: '💧', desc: 'Add a text watermark' },
     { id: 'number-pages', name: 'NUMBER PAGES', icon: '🔢', desc: 'Add page numbers' },
