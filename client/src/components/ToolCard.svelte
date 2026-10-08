@@ -42,12 +42,14 @@
   class="tool-card"
   class:expanded
   class:drag-over={dragOver}
-  role="button"
-  tabindex="0"
-  onclick={() => expanded = !expanded}
-  onkeydown={(e) => e.key === 'Enter' && (expanded = !expanded)}
 >
-  <div class="card-header">
+  <div
+    class="card-header"
+    role="button"
+    tabindex="0"
+    onclick={() => expanded = !expanded}
+    onkeydown={(e) => e.key === 'Enter' && (expanded = !expanded)}
+  >
     <span class="card-icon">{tool.icon}</span>
     <div class="card-info">
       <span class="card-title">{tool.name}</span>
