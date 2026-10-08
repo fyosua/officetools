@@ -25,44 +25,43 @@ if (!config.appPassword) {
   throw new Error("APP_PASSWORD must be set in .env file");
 }
 
-// Ensure processing dirs exist
 Bun.spawnSync(["mkdir", "-p", `${config.processingDir}/uploads`, `${config.processingDir}/results`]);
 
-// Helper: save uploaded file from form data
+const resultsDir = `${config.processingDir}/results`;
+
 async function saveUploadedFile(formData: FormData, field: string = "file"): Promise<string> {
   const file = formData.get(field) as File | null;
-  if (!file || file.size === 0) {
-    throw new Error(`No file provided (field: "${field}")`);
-  }
+  if (!file || file.size === 0) throw new Error(`No file provided`);
   const ext = file.name.split(".").pop() || "bin";
-  const uploadPath = `${config.processingDir}/uploads/${crypto.randomUUID()}.${ext}`;
-  await Bun.write(uploadPath, file);
-  return uploadPath;
+  const p = `${config.processingDir}/uploads/${crypto.randomUUID()}.${ext}`;
+  await Bun.write(p, file);
+  return p;
 }
 
-// Helper: save multiple uploaded files
 async function saveUploadedFiles(formData: FormData, field: string = "file"): Promise<string[]> {
   const files = formData.getAll(field) as File[];
-  if (!files || files.length === 0) {
-    throw new Error(`No files provided (field: "${field}")`);
-  }
+  if (!files || files.length === 0) throw new Error(`No files provided`);
   const paths: string[] = [];
-  for (const file of files) {
-    const ext = file.name.split(".").pop() || "bin";
-    const uploadPath = `${config.processingDir}/uploads/${crypto.randomUUID()}.${ext}`;
-    await Bun.write(uploadPath, file);
-    paths.push(uploadPath);
+  for (const f of files) {
+    const ext = f.name.split(".").pop() || "bin";
+    const p = `${config.processingDir}/uploads/${crypto.randomUUID()}.${ext}`;
+    await Bun.write(p, f);
+    paths.push(p);
   }
   return paths;
 }
 
-// Helper: require authenticated session
 function requireAuth({ cookie, set }: { cookie: any; set: any }): void {
   const session = cookie?.session;
   if (!session?.value || !verifySession(session.value, config.secretKey)) {
     set.status = 401;
     throw new Error("Unauthorized");
   }
+}
+
+function resultUrl(abspath: string): string {
+  const name = abspath.split("/").pop()!;
+  return `/api/download/${name}`;
 }
 
 const app = new Elysia()
@@ -73,147 +72,117 @@ const app = new Elysia()
     set.status = code === "VALIDATION" ? 400 : 500;
     return { error: msg || "Internal server error" };
   })
-  // --- Auth endpoints ---
-  .post(
-    "/api/login",
-    ({ body, cookie, set }) => {
-      const session = cookie?.session;
-      if (!session) { set.status = 500; return { success: false, message: "Cookie error" }; }
-      if (body.password !== config.appPassword) {
-        set.status = 401;
-        return { success: false, message: "Invalid password" };
-      }
-      const s = createSessionCookie(config.secretKey);
-      session.set({
-        value: s["session"],
-        maxAge: 86400,
-        path: "/",
-        httpOnly: true,
-        sameSite: "lax",
-      });
-      return { success: true, message: "Authenticated" };
-    },
-    { body: t.Object({ password: t.String() }) }
-  )
-  .get("/api/check-auth", ({ cookie }) => {
+  // --- Auth ---
+  .post("/api/login", ({ body, cookie, set }) => {
     const session = cookie?.session;
-    const val = typeof session?.value === "string" ? session.value : undefined;
-    return { authenticated: verifySession(val, config.secretKey) };
+    if (!session) { set.status = 500; return { success: false, message: "Cookie error" }; }
+    if (body.password !== config.appPassword) {
+      set.status = 401;
+      return { success: false, message: "Invalid password" };
+    }
+    const s = createSessionCookie(config.secretKey);
+    session.set({ value: s["session"], maxAge: 86400, path: "/", httpOnly: true, sameSite: "lax" });
+    return { success: true, message: "Authenticated" };
+  }, { body: t.Object({ password: t.String() }) })
+  .get("/api/check-auth", ({ cookie }) => {
+    const s = cookie?.session;
+    return { authenticated: verifySession(typeof s?.value === "string" ? s.value : undefined, config.secretKey) };
   })
   .post("/api/logout", ({ cookie }) => {
-    const session = cookie?.session;
-    if (session) session.set({ value: "", maxAge: 0, path: "/" });
+    const s = cookie?.session;
+    if (s) s.set({ value: "", maxAge: 0, path: "/" });
     return { success: true };
   })
-  // --- Health ---
-  .get("/api/health", () => ({ status: "ok", version: "0.2.0" }))
-  // --- Tool endpoints ---
+  .get("/api/health", () => ({ status: "ok", version: "1.0.0" }))
+  // --- Download endpoint ---
+  .get("/api/download/:filename", ({ params: { filename }, cookie, set }: any) => {
+    const s = cookie?.session;
+    if (!verifySession(typeof s?.value === "string" ? s.value : undefined, config.secretKey)) {
+      set.status = 401;
+      return { error: "Unauthorized" };
+    }
+    const filepath = `${resultsDir}/${filename}`;
+    const file = Bun.file(filepath);
+    if (!file.size) { set.status = 404; return { error: "File not found" }; }
+    return new Response(file, {
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+      },
+    });
+  })
+  // --- Tools ---
   .post("/api/merge", async ({ request, cookie, set }: any) => {
     requireAuth({ cookie, set });
-    const formData = await request.formData();
-    const paths = await saveUploadedFiles(formData, "file");
-    const resultPath = await merge_pdfs(paths);
-    return { path: resultPath };
+    const paths = await saveUploadedFiles(await request.formData(), "file");
+    return { url: resultUrl(await merge_pdfs(paths)) };
   })
   .post("/api/split", async ({ request, cookie, set }: any) => {
     requireAuth({ cookie, set });
-    const formData = await request.formData();
-    const path = await saveUploadedFile(formData, "file");
-    const ranges = (formData.get("input") as string) || "1";
-    const resultPaths = await split_pdf(path, ranges);
-    return { paths: resultPaths };
+    const fd = await request.formData();
+    const path = await saveUploadedFile(fd, "file");
+    const ranges = (fd.get("input") as string) || "1";
+    const urls = (await split_pdf(path, ranges)).map(resultUrl);
+    return { urls };
   })
   .post("/api/compress", async ({ request, cookie, set }: any) => {
     requireAuth({ cookie, set });
-    const formData = await request.formData();
-    const path = await saveUploadedFile(formData, "file");
-    const mode = (formData.get("mode") as string) || "ebook";
-    const resultPath = await compress_pdf(path, mode);
-    return { path: resultPath };
+    const fd = await request.formData();
+    const path = await saveUploadedFile(fd, "file");
+    return { url: resultUrl(await compress_pdf(path, (fd.get("mode") as string) || "ebook")) };
   })
   .post("/api/pdf-to-jpg", async ({ request, cookie, set }: any) => {
     requireAuth({ cookie, set });
-    const formData = await request.formData();
-    const path = await saveUploadedFile(formData, "file");
-    const dpi = parseInt((formData.get("dpi") as string) || "150", 10);
-    const resultPath = await pdf_to_jpg(path, dpi);
-    return { path: resultPath };
+    const fd = await request.formData();
+    const path = await saveUploadedFile(fd, "file");
+    const dpi = parseInt((fd.get("dpi") as string) || "150", 10);
+    return { url: resultUrl(await pdf_to_jpg(path, dpi)) };
   })
   .post("/api/jpg-to-pdf", async ({ request, cookie, set }: any) => {
     requireAuth({ cookie, set });
-    const formData = await request.formData();
-    const paths = await saveUploadedFiles(formData, "file");
-    const resultPath = await images_to_pdf(paths);
-    return { path: resultPath };
+    const paths = await saveUploadedFiles(await request.formData(), "file");
+    return { url: resultUrl(await images_to_pdf(paths)) };
   })
   .post("/api/docx-to-pdf", async ({ request, cookie, set }: any) => {
     requireAuth({ cookie, set });
-    const formData = await request.formData();
-    const path = await saveUploadedFile(formData, "file");
-    const resultPath = await docx_to_pdf(path);
-    return { path: resultPath };
+    return { url: resultUrl(await docx_to_pdf(await saveUploadedFile(await request.formData(), "file"))) };
   })
   .post("/api/pdf-to-docx", async ({ request, cookie, set }: any) => {
     requireAuth({ cookie, set });
-    const formData = await request.formData();
-    const path = await saveUploadedFile(formData, "file");
-    const resultPath = await pdf_to_docx(path);
-    return { path: resultPath };
+    return { url: resultUrl(await pdf_to_docx(await saveUploadedFile(await request.formData(), "file"))) };
   })
   .post("/api/rotate", async ({ request, cookie, set }: any) => {
     requireAuth({ cookie, set });
-    const formData = await request.formData();
-    const path = await saveUploadedFile(formData, "file");
-    const pages = (formData.get("pages") as string) || "all";
-    const angle = parseInt((formData.get("angle") as string) || "90", 10);
-    const resultPath = await rotate_pdf(path, pages, angle);
-    return { path: resultPath };
+    const fd = await request.formData();
+    const path = await saveUploadedFile(fd, "file");
+    return { url: resultUrl(await rotate_pdf(path, (fd.get("pages") as string) || "all", parseInt((fd.get("angle") as string) || "90", 10))) };
   })
   .post("/api/unlock", async ({ request, cookie, set }: any) => {
     requireAuth({ cookie, set });
-    const formData = await request.formData();
-    const path = await saveUploadedFile(formData, "file");
-    const password = (formData.get("password") as string) || "";
-    const resultPath = await unlock_pdf(path, password);
-    return { path: resultPath };
+    const fd = await request.formData();
+    return { url: resultUrl(await unlock_pdf(await saveUploadedFile(fd, "file"), (fd.get("password") as string) || "")) };
   })
   .post("/api/protect", async ({ request, cookie, set }: any) => {
     requireAuth({ cookie, set });
-    const formData = await request.formData();
-    const path = await saveUploadedFile(formData, "file");
-    const password = (formData.get("password") as string) || "";
-    const resultPath = await protect_pdf(path, password);
-    return { path: resultPath };
+    const fd = await request.formData();
+    return { url: resultUrl(await protect_pdf(await saveUploadedFile(fd, "file"), (fd.get("password") as string) || "")) };
   })
   .post("/api/pdf-to-text", async ({ request, cookie, set }: any) => {
     requireAuth({ cookie, set });
-    const formData = await request.formData();
-    const path = await saveUploadedFile(formData, "file");
-    const text = await pdf_to_text(path);
+    const text = await pdf_to_text(await saveUploadedFile(await request.formData(), "file"));
     return { text };
   })
   .post("/api/pdf-editor", async ({ request, cookie, set }: any) => {
     requireAuth({ cookie, set });
-    const formData = await request.formData();
-    const path = await saveUploadedFile(formData, "file");
-    const text = (formData.get("text") as string) || "";
-    const page = parseInt((formData.get("page") as string) || "1", 10);
-    const x = parseFloat((formData.get("x") as string) || "50");
-    const y = parseFloat((formData.get("y") as string) || "50");
-    const resultPath = await add_text_annotation(path, text, page, x, y);
-    return { path: resultPath };
+    const fd = await request.formData();
+    const path = await saveUploadedFile(fd, "file");
+    const text = (fd.get("text") as string) || "";
+    return { url: resultUrl(await add_text_annotation(path, text, 1, 50, 50)) };
   })
-  // --- Serve Svelte static build ---
+  // --- Static ---
   .use(staticPlugin({ assets: "./client/dist", prefix: "/" }))
-  // Fallback: serve index.html for root
-  .get("/", () => {
-    const file = Bun.file("./client/dist/index.html");
-    return new Response(file, {
-      headers: { "Content-Type": "text/html" },
-    });
-  })
+  .get("/", () => new Response(Bun.file("./client/dist/index.html"), { headers: { "Content-Type": "text/html" } }))
   .listen(config.port);
 
 console.log(`🛠️  OfficeTools running on http://127.0.0.1:${config.port}`);
-
 export type App = typeof app;

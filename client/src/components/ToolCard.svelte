@@ -104,14 +104,16 @@
         <div class="result-box" class:result-error={!result.ok}>
           {#if !result.ok}
             <pre>{result.data}</pre>
-          {:else if typeof result.data === 'string' && result.data.startsWith('/')}
-            <p class="result-success">✅ Done</p>
-            <pre>{result.data}</pre>
           {:else if typeof result.data === 'object' && result.data !== null}
             <p class="result-success">✅ Done</p>
             <pre>{JSON.stringify(result.data, null, 2)}</pre>
-            {#if result.data.path}
-              <a href="/api/download/{result.data.path.split('/').pop()}" class="download-btn" target="_blank">⬇ DOWNLOAD</a>
+            {#if result.data.url}
+              <a href={result.data.url} class="download-btn" target="_blank">⬇ DOWNLOAD</a>
+            {/if}
+            {#if result.data.urls && result.data.urls.length}
+              {#each result.data.urls as u}
+                <a href={u} class="download-btn" target="_blank">⬇ DOWNLOAD PART</a>
+              {/each}
             {/if}
           {:else}
             <pre>{result.data}</pre>
