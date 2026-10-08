@@ -28,6 +28,15 @@ import { crop_pdf } from "./tools/crop_pdf";
 const config = loadConfig();
 const resultsDir = `${config.processingDir}/results`;
 
+/** Require a valid session cookie, else 401. Call first in every protected handler. */
+function requireAuth({ cookie, set }: { cookie: any; set: any }): void {
+  const session = cookie?.session;
+  if (!session?.value || !verifySession(session.value, config.secretKey)) {
+    set.status = 401;
+    throw new Error("Unauthorized");
+  }
+}
+
 async function saveUploadedFile(formData: FormData, field: string = "file"): Promise<string> {
   const file = formData.get(field) as File | null;
   if (!file || file.size === 0) throw new Error(`No file provided`);
@@ -68,7 +77,7 @@ const app = new Elysia()
     const msg = error && typeof error === "object" && "message" in error ? (error as any).message : String(error);
     return { error: msg || "Internal server error" };
   })
-  // --- Auth (optional — tools are public per PRD R1.2; endpoints kept for compatibility) ---
+  // --- Auth (REQUIRED for private use) ---
   .post("/api/login", ({ body, cookie, set }) => {
     const session = cookie?.session;
     if (!session) { set.status = 500; return { success: false, message: "Cookie error" }; }
@@ -90,8 +99,9 @@ const app = new Elysia()
     return { success: true };
   })
   .get("/api/health", () => ({ status: "ok", version: "1.1.0" }))
-  // --- Download endpoint (public) ---
-  .get("/api/download/:filename", ({ params: { filename }, set }: any) => {
+  // --- Download endpoint (PROTECTED) ---
+  .get("/api/download/:filename", ({ params: { filename }, cookie, set }: any) => {
+    requireAuth({ cookie, set });
     const filepath = `${resultsDir}/${filename}`;
     const file = Bun.file(filepath);
     if (!file.size) { set.status = 404; return { error: "File not found" }; }
@@ -102,63 +112,74 @@ const app = new Elysia()
       },
     });
   })
-  // --- Tools (public) ---
-  .post("/api/merge", async ({ request }: any) => {
+  // --- Tools (ALL PROTECTED) ---
+  .post("/api/merge", async ({ request, cookie, set }: any) => {
+    requireAuth({ cookie, set });
     const paths = await saveUploadedFiles(await request.formData(), "file");
     return { url: resultUrl(await merge_pdfs(paths)) };
   })
-  .post("/api/split", async ({ request }: any) => {
+  .post("/api/split", async ({ request, cookie, set }: any) => {
+    requireAuth({ cookie, set });
     const fd = await request.formData();
     const path = await saveUploadedFile(fd, "file");
     const mode = (fd.get("mode") as string) || "split";
     const pages = (fd.get("pages") as string) || (fd.get("input") as string) || "1";
     return { urls: resultUrls(await split_pdf(path, mode as "split" | "extract" | "perpage", pages)) };
   })
-  .post("/api/compress", async ({ request }: any) => {
+  .post("/api/compress", async ({ request, cookie, set }: any) => {
+    requireAuth({ cookie, set });
     const fd = await request.formData();
     const path = await saveUploadedFile(fd, "file");
     return { url: resultUrl(await compress_pdf(path, (fd.get("mode") as string) || "ebook")) };
   })
-  .post("/api/pdf-to-jpg", async ({ request }: any) => {
+  .post("/api/pdf-to-jpg", async ({ request, cookie, set }: any) => {
+    requireAuth({ cookie, set });
     const fd = await request.formData();
     const path = await saveUploadedFile(fd, "file");
     const dpi = parseInt((fd.get("dpi") as string) || "150", 10);
     return { urls: resultUrls(await pdf_to_jpg(path, dpi)) };
   })
-  .post("/api/pdf-to-png", async ({ request }: any) => {
+  .post("/api/pdf-to-png", async ({ request, cookie, set }: any) => {
+    requireAuth({ cookie, set });
     const fd = await request.formData();
     const path = await saveUploadedFile(fd, "file");
     const dpi = parseInt((fd.get("dpi") as string) || "150", 10);
     return { urls: resultUrls(await pdf_to_png(path, dpi)) };
   })
-  .post("/api/delete-pages", async ({ request }: any) => {
+  .post("/api/delete-pages", async ({ request, cookie, set }: any) => {
+    requireAuth({ cookie, set });
     const fd = await request.formData();
     const path = await saveUploadedFile(fd, "file");
     return { url: resultUrl(await delete_pages(path, (fd.get("pages") as string) || "")) };
   })
-  .post("/api/office-to-pdf", async ({ request }: any) => {
+  .post("/api/office-to-pdf", async ({ request, cookie, set }: any) => {
+    requireAuth({ cookie, set });
     const fd = await request.formData();
     const path = await saveUploadedFile(fd, "file");
     return { url: resultUrl(await office_to_pdf(path)) };
   })
-  .post("/api/watermark", async ({ request }: any) => {
+  .post("/api/watermark", async ({ request, cookie, set }: any) => {
+    requireAuth({ cookie, set });
     const fd = await request.formData();
     const path = await saveUploadedFile(fd, "file");
     return { url: resultUrl(await watermark_pdf(path, (fd.get("text") as string) || "CONFIDENTIAL")) };
   })
-  .post("/api/number-pages", async ({ request }: any) => {
+  .post("/api/number-pages", async ({ request, cookie, set }: any) => {
+    requireAuth({ cookie, set });
     const fd = await request.formData();
     const path = await saveUploadedFile(fd, "file");
     const start = parseInt((fd.get("start") as string) || "1", 10);
     return { url: resultUrl(await number_pages(path, isNaN(start) ? 1 : start)) };
   })
-  .post("/api/crop", async ({ request }: any) => {
+  .post("/api/crop", async ({ request, cookie, set }: any) => {
+    requireAuth({ cookie, set });
     const fd = await request.formData();
     const path = await saveUploadedFile(fd, "file");
     const margin = parseFloat((fd.get("margin") as string) || "10");
     return { url: resultUrl(await crop_pdf(path, isNaN(margin) ? 10 : margin)) };
   })
-  .post("/api/jpg-to-pdf", async ({ request }: any) => {
+  .post("/api/jpg-to-pdf", async ({ request, cookie, set }: any) => {
+    requireAuth({ cookie, set });
     const fd = await request.formData();
     const paths = await saveUploadedFiles(fd, "file");
     const margin = parseFloat((fd.get("margin") as string) || "0");
@@ -166,30 +187,37 @@ const app = new Elysia()
     const size = (fd.get("size") as string) || "auto";
     return { url: resultUrl(await images_to_pdf(paths, { margin: isNaN(margin) ? 0 : margin, orientation, size })) };
   })
-  .post("/api/docx-to-pdf", async ({ request }: any) => {
+  .post("/api/docx-to-pdf", async ({ request, cookie, set }: any) => {
+    requireAuth({ cookie, set });
     return { url: resultUrl(await docx_to_pdf(await saveUploadedFile(await request.formData(), "file"))) };
   })
-  .post("/api/pdf-to-docx", async ({ request }: any) => {
+  .post("/api/pdf-to-docx", async ({ request, cookie, set }: any) => {
+    requireAuth({ cookie, set });
     return { url: resultUrl(await pdf_to_docx(await saveUploadedFile(await request.formData(), "file"))) };
   })
-  .post("/api/rotate", async ({ request }: any) => {
+  .post("/api/rotate", async ({ request, cookie, set }: any) => {
+    requireAuth({ cookie, set });
     const fd = await request.formData();
     const path = await saveUploadedFile(fd, "file");
     return { url: resultUrl(await rotate_pdf(path, (fd.get("pages") as string) || "all", parseInt((fd.get("angle") as string) || "90", 10))) };
   })
-  .post("/api/unlock", async ({ request }: any) => {
+  .post("/api/unlock", async ({ request, cookie, set }: any) => {
+    requireAuth({ cookie, set });
     const fd = await request.formData();
     return { url: resultUrl(await unlock_pdf(await saveUploadedFile(fd, "file"), (fd.get("password") as string) || "")) };
   })
-  .post("/api/protect", async ({ request }: any) => {
+  .post("/api/protect", async ({ request, cookie, set }: any) => {
+    requireAuth({ cookie, set });
     const fd = await request.formData();
     return { url: resultUrl(await protect_pdf(await saveUploadedFile(fd, "file"), (fd.get("password") as string) || "")) };
   })
-  .post("/api/pdf-to-text", async ({ request }: any) => {
+  .post("/api/pdf-to-text", async ({ request, cookie, set }: any) => {
+    requireAuth({ cookie, set });
     const text = await pdf_to_text(await saveUploadedFile(await request.formData(), "file"));
     return { text };
   })
-  .post("/api/pdf-editor", async ({ request }: any) => {
+  .post("/api/pdf-editor", async ({ request, cookie, set }: any) => {
+    requireAuth({ cookie, set });
     const fd = await request.formData();
     const path = await saveUploadedFile(fd, "file");
     const text = (fd.get("text") as string) || "";
