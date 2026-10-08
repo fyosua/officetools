@@ -200,6 +200,13 @@ const app = new Elysia()
   })
   // --- Serve Svelte static build ---
   .use(staticPlugin({ assets: "./client/dist", prefix: "/" }))
+  // Fallback: serve index.html for root
+  .get("/", () => {
+    const file = Bun.file("./client/dist/index.html");
+    return new Response(file, {
+      headers: { "Content-Type": "text/html" },
+    });
+  })
   .listen(config.port);
 
 console.log(`🛠️  OfficeTools running on http://127.0.0.1:${config.port}`);
