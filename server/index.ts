@@ -24,6 +24,7 @@ import { office_to_pdf } from "./tools/office_to_pdf";
 import { watermark_pdf } from "./tools/watermark";
 import { number_pages } from "./tools/number_pages";
 import { crop_pdf } from "./tools/crop_pdf";
+import { organize_pdf } from "./tools/organize_pdf";
 
 const config = loadConfig();
 const resultsDir = `${config.processingDir}/results`;
@@ -163,14 +164,16 @@ const app = new Elysia()
     requireAuth({ cookie, set });
     const fd = await request.formData();
     const path = await saveUploadedFile(fd, "file");
-    return { url: resultUrl(await watermark_pdf(path, (fd.get("text") as string) || "CONFIDENTIAL")) };
+    const opacity = parseFloat((fd.get("opacity") as string) || "0.35");
+    return { url: resultUrl(await watermark_pdf(path, (fd.get("text") as string) || "CONFIDENTIAL", isNaN(opacity) ? 0.35 : opacity)) };
   })
   .post("/api/number-pages", async ({ request, cookie, set }: any) => {
     requireAuth({ cookie, set });
     const fd = await request.formData();
     const path = await saveUploadedFile(fd, "file");
     const start = parseInt((fd.get("start") as string) || "1", 10);
-    return { url: resultUrl(await number_pages(path, isNaN(start) ? 1 : start)) };
+    const position = (fd.get("position") as string) || "bm";
+    return { url: resultUrl(await number_pages(path, isNaN(start) ? 1 : start, position)) };
   })
   .post("/api/crop", async ({ request, cookie, set }: any) => {
     requireAuth({ cookie, set });
@@ -178,6 +181,13 @@ const app = new Elysia()
     const path = await saveUploadedFile(fd, "file");
     const margin = parseFloat((fd.get("margin") as string) || "10");
     return { url: resultUrl(await crop_pdf(path, isNaN(margin) ? 10 : margin)) };
+  })
+  .post("/api/organize", async ({ request, cookie, set }: any) => {
+    requireAuth({ cookie, set });
+    const fd = await request.formData();
+    const path = await saveUploadedFile(fd, "file");
+    const spec = (fd.get("spec") as string) || "";
+    return { url: resultUrl(await organize_pdf(path, spec)) };
   })
   .post("/api/jpg-to-pdf", async ({ request, cookie, set }: any) => {
     requireAuth({ cookie, set });

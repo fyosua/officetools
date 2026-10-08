@@ -7,8 +7,9 @@ const resultsDir = `${config.processingDir}/results`;
 /**
  * Add a watermark text to every page of a PDF, diagonally.
  */
-export async function watermark_pdf(path: string, text: string): Promise<string> {
+export async function watermark_pdf(path: string, text: string, opacity: number = 0.35): Promise<string> {
   if (!text) throw new Error("Watermark text is required");
+  const o = Math.min(1, Math.max(0.05, opacity || 0.35));
   const bytes = await Bun.file(path).arrayBuffer();
   const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true });
   const font = await pdf.embedFont(StandardFonts.HelveticaBold);
@@ -22,7 +23,7 @@ export async function watermark_pdf(path: string, text: string): Promise<string>
       size,
       font,
       color: rgb(0.6, 0.6, 0.6),
-      opacity: 0.35,
+      opacity: o,
       rotate: degrees(Math.atan(height / width) * (180 / Math.PI)),
     });
   }

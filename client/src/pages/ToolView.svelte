@@ -3,6 +3,7 @@
   import { logout } from '../lib/auth.js';
   import { processFile } from '../lib/api.js';
   import PageViewer from '../components/PageViewer.svelte';
+  import Organizer from '../components/Organizer.svelte';
 
   let files = $state([]);
   let dragOver = $state(false);
@@ -18,9 +19,10 @@
     'pdf-to-jpg': { label: 'Upload a PDF to convert to images', accept: '.pdf', multiple: false, display: 'grid', params: [{ key: 'dpi', label: 'Resolution (DPI)', type: 'range', min: 72, max: 300, step: 10 }] },
     'pdf-to-png': { label: 'Upload a PDF to convert to PNG', accept: '.pdf', multiple: false, display: 'grid', params: [{ key: 'dpi', label: 'Resolution (DPI)', type: 'range', min: 72, max: 300, step: 10 }] },
     'delete-pages': { label: 'Upload a PDF, then click the pages to delete', accept: '.pdf', multiple: false, display: 'grid', pageSelect: true, params: [] },
+    organize: { label: 'Drag pages to reorder; rotate, duplicate or delete per page', accept: '.pdf', multiple: false, display: 'organize', params: [] },
     'office-to-pdf': { label: 'Upload an Office file to convert to PDF', accept: '.docx,.xlsx,.pptx,.odt,.ods,.odp', multiple: false, params: [] },
-    watermark: { label: 'Upload a PDF to watermark', accept: '.pdf', multiple: false, display: 'grid', params: [{ key: 'text', label: 'Watermark text', placeholder: 'CONFIDENTIAL' }] },
-    'number-pages': { label: 'Upload a PDF to number pages', accept: '.pdf', multiple: false, display: 'grid', params: [{ key: 'start', label: 'Start number', type: 'range', min: 1, max: 50, step: 1 }] },
+    watermark: { label: 'Upload a PDF to watermark', accept: '.pdf', multiple: false, display: 'grid', params: [{ key: 'text', label: 'Watermark text', placeholder: 'CONFIDENTIAL' }, { key: 'opacity', label: 'Opacity', type: 'range', min: 5, max: 100, step: 5, div: 100 }] },
+    'number-pages': { label: 'Upload a PDF to number pages', accept: '.pdf', multiple: false, display: 'grid', params: [{ key: 'position', label: 'Number position', type: 'position' }, { key: 'start', label: 'Start number', type: 'range', min: 1, max: 50, step: 1 }] },
     crop: { label: 'Upload a PDF to crop', accept: '.pdf', multiple: false, display: 'grid', params: [{ key: 'margin', label: 'Crop % per side', type: 'range', min: 0, max: 40, step: 1 }] },
     'jpg-to-pdf': { label: 'Upload images to convert to PDF', accept: '.jpg,.jpeg,.png', multiple: true, params: [{ key: 'margin', label: 'Margin (points)', type: 'range', min: 0, max: 80, step: 5 }, { key: 'orientation', label: 'Orientation', options: ['auto', 'portrait', 'landscape'] }, { key: 'size', label: 'Page size', options: ['auto', 'a4', 'letter'] }] },
     'docx-to-pdf': { label: 'Upload a Word document to convert', accept: '.docx', multiple: false, params: [] },
@@ -34,7 +36,7 @@
 
   let cfg = configs[tool.id] || configs['merge'];
   let params = $state({});
-  cfg.params.forEach((p) => { if (p.type === 'range' && params[p.key] === undefined) params[p.key] = p.min ?? 0; });
+  cfg.params.forEach((p) => { if (p.type === 'range' && params[p.key] === undefined) params[p.key] = p.min ?? 0; if (p.type === 'position' && params[p.key] === undefined) params[p.key] = 'bm'; });
 
   // Page preview + selection (Smallpdf-style thumbnails)
   let pageImages = $state([]);       // /api/pdf-to-png urls, one per page
@@ -42,9 +44,10 @@
   let previewLoading = $state(false);
   let rotations = $state({});        // pageNum1based -> cumulative angle (rotate viewer)
   let rotateCur = $state(0);         // current page index in the rotate viewer
+  let orgItems = $state([]);         // organize: [{src,rot}] final page list
 
   async function loadPreview() {
-    pageImages = []; selectedPages = []; rotations = {}; rotateCur = 0;
+    pageImages = []; selectedPages = []; rotations = {}; rotateCur = 0; orgItems = [];
     if (!cfg.display || files.length !== 1) return;
     const ext = (files[0].name.split('.').pop() || '').toLowerCase();
     if (ext !== 'pdf') return;
@@ -58,6 +61,9 @@
       if (tool.id === 'split' && pageImages.length) {
         parts = [pageImages.map((_, i) => i + 1)];
         curPart = 0;
+      }
+      if (tool.id === 'organize' && pageImages.length) {
+        orgItems = pageImages.map((_, i) => ({ src: i + 1, rot: 0 }));
       }
     } catch (e) {
       pageImages = []; // preview is optional; tool still works
@@ -84,7 +90,7 @@
     const s = [...(e.target?.files || [])];
     if (s.length) { files = s; loadPreview(); }
   }
-  function clearFiles() { files = []; result = null; error = ''; pageImages = []; selectedPages = []; rotations = {}; rotateCur = 0; parts = []; curPart = 0; dragIdx = null; }
+  function clearFiles() { files = []; result = null; error = ''; pageImages = []; selectedPages = []; rotations = {}; rotateCur = 0; parts = []; curPart = 0; dragIdx = null; orgItems = []; }
 
   // --- Merge: drag-drop to reorder the merged files (which file is first) ---
   let dragIdx = $state(null);
@@ -117,6 +123,20 @@
 
   async function handleProcess() {
     if (!files.length) { error = 'Please select a file first'; return; }
+    // Organize: send final page order + per-page rotation spec "src:rot,..."
+    if (tool.id === 'organize') {
+      if (!orgItems.length) { error = 'No pages to organize'; return; }
+      running = true; error = ''; result = null;
+      try {
+        const fd = new FormData();
+        for (const f of files) fd.append('file', f);
+        fd.append('spec', orgItems.map((o) => `${o.src}:${o.rot || 0}`).join(','));
+        const res = await processFile(`/api/${tool.id}`, fd);
+        result = res;
+      } catch (err) { error = err.message; }
+      finally { running = false; }
+      return;
+    }
     // Split "parts" mode: send explicit page groups
     if (tool.id === 'split' && params.mode === 'parts') {
       const spec = parts.filter((g) => g.length).map((g) => g.join(',')).join(';');
@@ -164,7 +184,7 @@
       if (cfg.pageSelect && selectedPages.length) fd.append('pages', selectedPages.join(','));
       for (const p of cfg.params) {
         const val = params[p.key] ?? (p.type === 'range' ? (p.min ?? 0) : '');
-        if (val !== '' && val !== undefined) fd.append(p.key, String(val));
+        if (val !== '' && val !== undefined) fd.append(p.key, p.div ? String(Number(val) / p.div) : String(val));
       }
       const res = await processFile(`/api/${tool.id}`, fd);
       result = res;
@@ -274,8 +294,11 @@
           </div>
         {/if}
 
+        <!-- Preview: organize pages (drag reorder / rotate / duplicate / delete) -->
+        {#if cfg.display === 'organize' && pageImages.length}
+          <Organizer images={pageImages} bind:items={orgItems} />
         <!-- Preview: full-size single-page viewer (rotate) -->
-        {#if cfg.display === 'viewer' && pageImages.length}
+        {:else if cfg.display === 'viewer' && pageImages.length}
           <PageViewer images={pageImages} bind:rotations bind:cur={rotateCur} />
         <!-- Preview: large thumbnails (grid / select) -->
         {:else if cfg.display && !(tool.id === 'split' && params.mode === 'parts') && (pageImages.length || previewLoading)}
@@ -320,6 +343,16 @@
                   </select>
                 {:else if p.type === 'range'}
                   <input class="param-range" type="range" min={p.min} max={p.max} step={p.step || 1} bind:value={params[p.key]} />
+                {:else if p.type === 'position'}
+                  <div class="pos-grid">
+                    {#each [['tl','tm','tr'],['ml','mm','mr'],['bl','bm','br']] as row}
+                      <div class="pos-row">
+                        {#each row as pos}
+                          <button type="button" class:pos-active={params[p.key] === pos} onclick={() => (params[p.key] = pos)}>{pos}</button>
+                        {/each}
+                      </div>
+                    {/each}
+                  </div>
                 {:else}
                   <input class="param-input" type="text" placeholder={p.placeholder} bind:value={params[p.key]} />
                 {/if}
@@ -441,6 +474,13 @@
   .param-row { display: flex; flex-direction: column; gap: 0.3rem; }
   .param-val { float: right; color: var(--neon-cyan); font-size: 0.72rem; letter-spacing: 0.05em; }
   .param-range { width: 100%; accent-color: var(--neon-cyan); }
+  .pos-grid { display: flex; flex-direction: column; gap: 0.3rem; }
+  .pos-row { display: flex; gap: 0.3rem; }
+  .pos-grid button {
+    width: 48px; height: 30px; font-size: 0.65rem; cursor: pointer; font-family: inherit; text-transform: uppercase;
+    background: rgba(0,0,0,0.3); border: 1px solid rgba(0,255,245,0.22); color: var(--dim); border-radius: 4px;
+  }
+  .pos-grid button.pos-active { border-color: var(--neon-cyan); color: var(--neon-cyan); background: rgba(0,255,245,0.12); }
 
   /* Merge drag-order cards */
   .merge-order { width: 100%; margin-top: 1.25rem; display: flex; flex-direction: column; gap: 0.5rem; }
