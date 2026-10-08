@@ -47,9 +47,10 @@
   let rotateCur = $state(0);         // current page index in the rotate viewer
   let orgItems = $state([]);         // organize: [{src,rot}] final page list
   let annos = $state([]);            // pdf editor annotations
+  let imgFiles = $state([]);         // pdf editor uploaded images [{file,url}]
 
   async function loadPreview() {
-    pageImages = []; selectedPages = []; rotations = {}; rotateCur = 0; orgItems = []; annos = [];
+    pageImages = []; selectedPages = []; rotations = {}; rotateCur = 0; orgItems = []; annos = []; imgFiles = [];
     if (!cfg.display || files.length !== 1) return;
     const ext = (files[0].name.split('.').pop() || '').toLowerCase();
     if (ext !== 'pdf') return;
@@ -92,7 +93,7 @@
     const s = [...(e.target?.files || [])];
     if (s.length) { files = s; loadPreview(); }
   }
-  function clearFiles() { files = []; result = null; error = ''; pageImages = []; selectedPages = []; rotations = {}; rotateCur = 0; parts = []; curPart = 0; dragIdx = null; orgItems = []; annos = []; }
+  function clearFiles() { files = []; result = null; error = ''; pageImages = []; selectedPages = []; rotations = {}; rotateCur = 0; parts = []; curPart = 0; dragIdx = null; orgItems = []; annos = []; imgFiles = []; }
 
   // --- Merge: drag-drop to reorder the merged files (which file is first) ---
   let dragIdx = $state(null);
@@ -127,12 +128,14 @@
     if (!files.length) { error = 'Please select a file first'; return; }
     // PDF Editor: send annotation spec to /api/annotate
     if (cfg.display === 'editor') {
-      if (!annos.length) { error = 'Add at least one annotation (text / highlight / draw / sign) first'; return; }
+      const realAnnos = annos.filter((a) => a.type !== 'image' || imgFiles[a.imgIdx]);
+      if (!realAnnos.length) { error = 'Add at least one annotation (text / highlight / draw / sign / image) first'; return; }
       running = true; error = ''; result = null;
       try {
         const fd = new FormData();
         for (const f of files) fd.append('file', f);
-        fd.append('spec', JSON.stringify(annos.map((a) => ({ ...a }))));
+        imgFiles.forEach((im, i) => { if (im?.file) fd.append(`image_${i}`, im.file); });
+        fd.append('spec', JSON.stringify(realAnnos.map((a) => (a.type === 'image' ? { ...a } : { ...a }))));
         const res = await processFile('/api/annotate', fd);
         result = res;
       } catch (err) { error = err.message; }
@@ -312,7 +315,7 @@
 
         <!-- Preview: PDF editor canvas (annotate) -->
         {#if cfg.display === 'editor' && pageImages.length}
-          <PdfEditor images={pageImages} bind:annos apply={handleProcess} />
+          <PdfEditor images={pageImages} bind:annos bind:imgFiles apply={handleProcess} />
         <!-- Preview: organize pages (drag reorder / rotate / duplicate / delete) -->
         {:else if cfg.display === 'organize' && pageImages.length}
           <Organizer images={pageImages} bind:items={orgItems} />
