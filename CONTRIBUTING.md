@@ -28,18 +28,16 @@ docs: add API reference
 
 ## Pull Request Checklist
 
-- [ ] Tests pass (`python3 -m pytest tests/ -v`)
-- [ ] Coverage ≥ 80% (`pytest --cov=tools`)
-- [ ] Lint clean (`ruff check .`)
-- [ ] Type check passes (`mypy .`)
+- [ ] TypeScript compiles (`cd .. && bunx tsc --noEmit`)
+- [ ] Svelte frontend builds (`cd client && bun run build`)
 - [ ] No hardcoded secrets
 - [ ] CHANGELOG.md updated
-- [ ] Manual smoke test in browser
+- [ ] Manual smoke test in browser (login + tool run)
 
 ## Code Standards
 
 - Functions ≤ 50 lines
-- Docstrings on all public API functions
-- Type hints on all function signatures
-- One tool per file in `tools/`
-- Each tool has a corresponding test file in `tests/`
+- JSDoc comments on all exported functions
+- TypeScript types on all function signatures
+- One tool per file in `server/tools/`
+- File naming: kebab-case (e.g. `pdf-to-jpg.ts`)
