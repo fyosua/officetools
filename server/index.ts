@@ -124,7 +124,8 @@ const app = new Elysia()
     const path = await saveUploadedFile(fd, "file");
     const mode = (fd.get("mode") as string) || "split";
     const pages = (fd.get("pages") as string) || (fd.get("input") as string) || "1";
-    return { urls: resultUrls(await split_pdf(path, mode as "split" | "extract" | "perpage", pages)) };
+    const parts = (fd.get("parts") as string) || "";
+    return { urls: resultUrls(await split_pdf(path, mode as "split" | "extract" | "perpage" | "parts", pages, parts)) };
   })
   .post("/api/compress", async ({ request, cookie, set }: any) => {
     requireAuth({ cookie, set });
