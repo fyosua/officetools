@@ -108,8 +108,8 @@
   .stage-wrap { display: flex; align-items: center; gap: 0.6rem; }
   .stage {
     position: relative; flex: 1; min-height: 46vh; overflow: hidden; cursor: crosshair;
-    background: repeating-linear-gradient(45deg,#16161d,#16161d 12px,#1b1b24 12px,#1b1b24 24px);
-    border: 1px solid rgba(0,255,245,0.25); border-radius: 6px;
+    background: #e6e6e6;
+    border: 1px solid rgba(0,0,0,0.12); border-radius: 6px;
   }
   .stage img { display: block; width: 100%; height: auto; }
   .anno-text { position: absolute; transform: translateY(-100%); font-family: sans-serif; white-space: nowrap; pointer-events: none; }

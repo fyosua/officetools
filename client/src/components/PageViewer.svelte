@@ -26,9 +26,8 @@
   .stage {
     flex: 1; display: flex; align-items: center; justify-content: center;
     min-height: 46vh; max-height: 62vh; overflow: auto;
-    background: repeating-linear-gradient(
-        45deg, #16161d, #16161d 12px, #1b1b24 12px, #1b1b24 24px);
-    border: 1px solid rgba(0,255,245,0.25); border-radius: 6px; padding: 0.5rem;
+    background: #e6e6e6;
+    border: 1px solid rgba(0,0,0,0.12); border-radius: 6px; padding: 0.5rem;
   }
   .stage img {
     width: 100%; height: auto; max-width: 460px; max-height: 58vh;
