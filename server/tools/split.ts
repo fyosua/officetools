@@ -5,86 +5,79 @@ const config = loadConfig();
 const resultsDir = `${config.processingDir}/results`;
 
 /**
- * Parse a page range string like "1,3,5-7" into an array of 0-indexed page numbers.
+ * Parse a page range string like "1,3,5-7" into 0-indexed page numbers (sorted).
  */
 function parseRange(ranges: string, totalPages: number): number[] {
   const pages = new Set<number>();
-  const parts = ranges.split(",").map((s) => s.trim());
-
-  for (const part of parts) {
+  for (const part of ranges.split(",").map((s) => s.trim())) {
     if (part.includes("-")) {
-      const rangeParts = part.split("-").map((s) => s.trim());
-      if (rangeParts.length !== 2) {
-        throw new Error(`Invalid page range: ${part}`);
-      }
-      const startStr = rangeParts[0] as string;
-      const endStr = rangeParts[1] as string;
-      const start = parseInt(startStr, 10);
-      const end = parseInt(endStr, 10);
+      const [a, b] = part.split("-").map((s) => s.trim());
+      const start = parseInt(a as string, 10);
+      const end = parseInt(b as string, 10);
       if (isNaN(start) || isNaN(end) || start < 1 || end > totalPages || start > end) {
         throw new Error(`Invalid page range: ${part}`);
       }
-      for (let i = start; i <= end; i++) {
-        pages.add(i - 1); // convert to 0-indexed
-      }
+      for (let i = start; i <= end; i++) pages.add(i - 1);
     } else {
       const p = parseInt(part, 10);
-      if (isNaN(p) || p < 1 || p > totalPages) {
-        throw new Error(`Invalid page number: ${part}`);
-      }
+      if (isNaN(p) || p < 1 || p > totalPages) throw new Error(`Invalid page number: ${part}`);
       pages.add(p - 1);
     }
   }
-
   return [...pages].sort((a, b) => a - b);
 }
 
+async function writePdf(doc: PDFDocument): Promise<string> {
+  const outPath = `${resultsDir}/${crypto.randomUUID()}.pdf`;
+  await Bun.write(outPath, await doc.save());
+  return outPath;
+}
+
 /**
- * Split a PDF into separate files based on page ranges.
- * @param path - Absolute path to the PDF
- * @param ranges - Page range string e.g. "1-3,5,7-9"
- * @returns Array of output file paths
+ * Split a PDF into multiple documents.
+ * @param path absolute PDF path
+ * @param mode "split" (ranges -> separate files), "extract" (selected pages -> ONE file), "perpage" (each page -> own file)
+ * @param pages page-range string e.g. "1-3,5,7-9"
  */
-export async function split_pdf(path: string, ranges: string): Promise<string[]> {
-  const fileBytes = await Bun.file(path).arrayBuffer();
-  const pdf = await PDFDocument.load(fileBytes, { ignoreEncryption: true });
-  const totalPages = pdf.getPageCount();
-  const pageIndices = parseRange(ranges, totalPages);
+export async function split_pdf(path: string, mode: "split" | "extract" | "perpage", pages: string): Promise<string[]> {
+  const bytes = await Bun.file(path).arrayBuffer();
+  const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true });
+  const total = pdf.getPageCount();
+  const idx = parseRange(pages, total);
+  if (idx.length === 0) throw new Error("No pages matched");
 
-  if (pageIndices.length === 0) {
-    throw new Error("No pages matched the specified ranges");
+  if (mode === "extract") {
+    const out = await PDFDocument.create();
+    const copied = await out.copyPages(pdf, idx);
+    for (const p of copied) out.addPage(p);
+    return [await writePdf(out)];
   }
 
-  // Group contiguous pages into chunks
+  if (mode === "perpage") {
+    const outs: string[] = [];
+    for (const i of idx) {
+      const out = await PDFDocument.create();
+      const [cp] = await out.copyPages(pdf, [i]);
+      out.addPage(cp!);
+      outs.push(await writePdf(out));
+    }
+    return outs;
+  }
+
+  // mode "split": group contiguous indices into ranges -> separate files
   const chunks: number[][] = [];
-  let currentChunk: number[] = [pageIndices[0]!];
-
-  for (let i = 1; i < pageIndices.length; i++) {
-    const prev = pageIndices[i - 1]!;
-    const curr = pageIndices[i]!;
-    if (curr === prev + 1) {
-      currentChunk.push(curr);
-    } else {
-      chunks.push(currentChunk);
-      currentChunk = [curr];
-    }
+  let cur: number[] = [idx[0]!];
+  for (let i = 1; i < idx.length; i++) {
+    if (idx[i] === ((idx[i - 1] as number) + 1)) cur.push(idx[i]!);
+    else { chunks.push(cur); cur = [idx[i]!]; }
   }
-  chunks.push(currentChunk);
-
-  const outPaths: string[] = [];
-
+  chunks.push(cur);
+  const outs: string[] = [];
   for (const chunk of chunks) {
-    const newPdf = await PDFDocument.create();
-    const copiedPages = await newPdf.copyPages(pdf, chunk);
-    for (const page of copiedPages) {
-      newPdf.addPage(page);
-    }
-    const pdfBytes = await newPdf.save();
-    const outName = `${crypto.randomUUID()}.pdf`;
-    const outPath = `${resultsDir}/${outName}`;
-    await Bun.write(outPath, pdfBytes);
-    outPaths.push(outPath);
+    const out = await PDFDocument.create();
+    const copied = await out.copyPages(pdf, chunk);
+    for (const p of copied) out.addPage(p);
+    outs.push(await writePdf(out));
   }
-
-  return outPaths;
+  return outs;
 }
