@@ -1,11 +1,19 @@
 <script>
   import './app.css';
+  import { onMount } from 'svelte';
+  import { checkAuth } from './lib/auth.js';
   import Login from './pages/Login.svelte';
   import Dashboard from './pages/Dashboard.svelte';
   import ToolView from './pages/ToolView.svelte';
 
-  let currentView = $state('dashboard');
+  let currentView = $state('loading');
   let activeTool = $state(null);
+
+  onMount(async () => {
+    try {
+      currentView = (await checkAuth()) ? 'dashboard' : 'login';
+    } catch { currentView = 'login'; }
+  });
 
   function handleLogin() { currentView = 'dashboard'; }
   function handleLogout() { currentView = 'login'; }
