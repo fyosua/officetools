@@ -3,12 +3,19 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 git pull origin main
-source venv/bin/activate
-pip install -r requirements.txt
 
+# Install dependencies
+~/.bun/bin/bun install
+
+# Build Svelte frontend
+cd client && ~/.bun/bin/bun run build && cd ..
+
+# Set proper permissions
 chmod 600 .env
 chmod 700 processing/
 
+# Install systemd files
+sudo cp officetools.service /etc/systemd/system/officetools.service
 sudo systemctl daemon-reload
 sudo systemctl restart officetools
 sudo systemctl status officetools --no-pager

@@ -2,4 +2,4 @@
 Description=OfficeTools temp file cleanup
 [Service]
 Type=oneshot
-ExecStart=/home/clowniiizzz/yosua-portfolio/officetools/venv/bin/python3 /home/clowniiizzz/yosua-portfolio/officetools/cleanup.py
+ExecStart=/home/clowniiizzz/.bun/bin/bun run /home/clowniiizzz/yosua-portfolio/officetools/cleanup.ts

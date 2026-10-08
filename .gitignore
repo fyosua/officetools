@@ -1,4 +1,4 @@
-venv/
+node_modules/
 processing/
 .env
 __pycache__/
@@ -8,3 +8,6 @@ __pycache__/
 .DS_Store
 *.swp
 *.swo
+client/dist/
+client/node_modules/
+venv/
