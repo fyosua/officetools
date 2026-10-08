@@ -1,0 +1,10 @@
+venv/
+processing/
+.env
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.DS_Store
+*.swp
+*.swo

@@ -1,0 +1,7 @@
+[Unit]
+Description=Clean office-tools temp files hourly
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=1h
+[Install]
+WantedBy=timers.target
