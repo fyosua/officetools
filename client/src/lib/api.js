@@ -8,7 +8,12 @@ async function request(method, path, body) {
   if (body !== undefined) opts.body = JSON.stringify(body);
 
   const res = await fetch(`${API_BASE}${path}`, opts);
-  const data = await res.json();
+  let data;
+  try {
+    data = await res.json();
+  } catch {
+    throw new Error(`Server error: ${res.status} ${res.statusText}`);
+  }
 
   if (!res.ok) {
     throw new Error(data.error || `Request failed: ${res.status}`);
@@ -34,7 +39,12 @@ export async function processFile(endpoint, formData) {
     method: 'POST',
     body: formData,
   });
-  const data = await res.json();
+  let data;
+  try {
+    data = await res.json();
+  } catch {
+    throw new Error(`Server error: ${res.status} ${res.statusText}`);
+  }
   if (!res.ok) {
     throw new Error(data.error || `Request failed: ${res.status}`);
   }

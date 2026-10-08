@@ -13,7 +13,7 @@ export async function docx_to_pdf(path: string): Promise<string> {
   const outPath = `${resultsDir}/${outName}`;
 
   const proc = Bun.spawn([
-    "soffice",
+    "/usr/bin/soffice",
     "--headless",
     "--convert-to",
     "pdf",

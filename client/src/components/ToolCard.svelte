@@ -4,7 +4,9 @@
   let dragOver = $state(false);
   let result = $state(null);
   let input = $state('');
+  let files = $state([]);
   let running = $state(false);
+  let fileInput;
 
   function handleDragOver(e) {
     e.preventDefault();
@@ -18,9 +20,22 @@
   function handleDrop(e) {
     e.preventDefault();
     dragOver = false;
-    const files = [...e.dataTransfer.files];
-    if (files.length && tool.acceptFiles) {
-      input = files.map(f => f.name).join(', ');
+    const dropped = [...e.dataTransfer.files];
+    if (dropped.length && tool.acceptFiles) {
+      files = dropped;
+      input = dropped.map(f => f.name).join(', ');
+    }
+  }
+
+  function handleClickUpload() {
+    fileInput?.click();
+  }
+
+  function handleFileSelected(e) {
+    const selected = [...(e.target?.files || [])];
+    if (selected.length) {
+      files = selected;
+      input = selected.map(f => f.name).join(', ');
     }
   }
 
@@ -62,10 +77,11 @@
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="card-body" ondragover={handleDragOver} ondragleave={handleDragLeave} ondrop={handleDrop}>
       {#if tool.acceptFiles}
-        <div class="drop-zone" class:drag-over={dragOver}>
+        <div class="drop-zone" class:drag-over={dragOver} role="button" tabindex="0" onclick={handleClickUpload} onkeydown={(e) => e.key === 'Enter' && handleClickUpload()}>
           <span class="drop-icon">📁</span>
-          <span class="drop-text">{dragOver ? 'DROP FILES HERE' : 'Drag & drop files here'}</span>
+          <span class="drop-text">{dragOver ? 'DROP FILES HERE' : files.length ? files.map(f => f.name).join(', ') : 'Click or drag & drop files here'}</span>
         </div>
+        <input type="file" bind:this={fileInput} onchange={handleFileSelected} style="display:none" multiple />
       {/if}
 
       <textarea

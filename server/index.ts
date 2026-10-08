@@ -68,6 +68,11 @@ function requireAuth({ cookie, set }: { cookie: any; set: any }): void {
 const app = new Elysia()
   .use(cors())
   .use(cookie())
+  .onError(({ code, error, set }) => {
+    const msg = error && typeof error === "object" && "message" in error ? (error as any).message : String(error);
+    set.status = code === "VALIDATION" ? 400 : 500;
+    return { error: msg || "Internal server error" };
+  })
   // --- Auth endpoints ---
   .post(
     "/api/login",
