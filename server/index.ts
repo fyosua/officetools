@@ -69,7 +69,9 @@ const app = new Elysia()
   // --- Auth endpoints ---
   .post(
     "/api/login",
-    ({ body, cookie: { session }, set }) => {
+    ({ body, cookie, set }) => {
+      const session = cookie?.session;
+      if (!session) { set.status = 500; return { success: false, message: "Cookie error" }; }
       if (body.password !== config.appPassword) {
         set.status = 401;
         return { success: false, message: "Invalid password" };
@@ -88,7 +90,8 @@ const app = new Elysia()
   )
   .get("/api/check-auth", ({ cookie }) => {
     const session = cookie?.session;
-    return { authenticated: verifySession(session?.value, config.secretKey) };
+    const val = typeof session?.value === "string" ? session.value : undefined;
+    return { authenticated: verifySession(val, config.secretKey) };
   })
   .post("/api/logout", ({ cookie }) => {
     const session = cookie?.session;
