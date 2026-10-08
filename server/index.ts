@@ -1,6 +1,7 @@
 import { Elysia, t } from "elysia";
 import { cookie } from "@elysiajs/cookie";
 import { staticPlugin } from "@elysiajs/static";
+import { cors } from "@elysiajs/cors";
 import { loadConfig } from "./config";
 import { createSessionCookie, verifySession } from "./auth";
 
@@ -65,6 +66,7 @@ function requireAuth({ cookie, set }: { cookie: any; set: any }): void {
 }
 
 const app = new Elysia()
+  .use(cors())
   .use(cookie())
   // --- Auth endpoints ---
   .post(
