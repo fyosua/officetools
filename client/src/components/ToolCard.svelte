@@ -102,7 +102,20 @@
 
       {#if result}
         <div class="result-box" class:result-error={!result.ok}>
-          <pre>{result.data}</pre>
+          {#if !result.ok}
+            <pre>{result.data}</pre>
+          {:else if typeof result.data === 'string' && result.data.startsWith('/')}
+            <p class="result-success">✅ Done</p>
+            <pre>{result.data}</pre>
+          {:else if typeof result.data === 'object' && result.data !== null}
+            <p class="result-success">✅ Done</p>
+            <pre>{JSON.stringify(result.data, null, 2)}</pre>
+            {#if result.data.path}
+              <a href="/api/download/{result.data.path.split('/').pop()}" class="download-btn" target="_blank">⬇ DOWNLOAD</a>
+            {/if}
+          {:else}
+            <pre>{result.data}</pre>
+          {/if}
         </div>
       {/if}
     </div>
@@ -294,27 +307,53 @@
   }
 
   .result-box {
-    padding: 0.75rem;
-    background: rgba(0, 255, 245, 0.05);
-    border: 1px solid rgba(0, 255, 245, 0.2);
-    max-height: 200px;
-    overflow-y: auto;
-  }
-
-  .result-box pre {
-    margin: 0;
-    font-size: 0.75rem;
-    color: var(--neon-cyan);
-    white-space: pre-wrap;
-    word-break: break-all;
-    font-family: 'Courier New', monospace;
-  }
-
-  .result-box.result-error {
-    border-color: var(--neon-magenta);
-  }
-
-  .result-box.result-error pre {
-    color: var(--neon-magenta);
-  }
+      padding: 0.75rem;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(0, 255, 245, 0.2);
+      max-height: 200px;
+      overflow-y: auto;
+    }
+  
+    .result-box pre {
+      margin: 0;
+      font-size: 0.75rem;
+      color: var(--neon-cyan);
+      white-space: pre-wrap;
+      word-break: break-all;
+      font-family: 'Courier New', monospace;
+    }
+  
+    .result-box.result-error {
+      border-color: var(--neon-magenta);
+    }
+  
+    .result-box.result-error pre {
+      color: var(--neon-magenta);
+    }
+  
+    .result-success {
+      color: #00ff00;
+      font-size: 0.8rem;
+      margin-bottom: 0.5rem;
+      font-family: 'Courier New', monospace;
+      text-shadow: 0 0 8px rgba(0, 255, 0, 0.3);
+    }
+  
+    .download-btn {
+      display: inline-block;
+      margin-top: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: transparent;
+      border: 1px solid var(--neon-cyan);
+      color: var(--neon-cyan);
+      text-decoration: none;
+      font-size: 0.75rem;
+      font-family: 'Courier New', monospace;
+      transition: all 0.3s;
+    }
+  
+    .download-btn:hover {
+      background: rgba(0, 255, 245, 0.1);
+      box-shadow: 0 0 15px rgba(0, 255, 245, 0.2);
+    }
 </style>
