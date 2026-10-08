@@ -55,6 +55,10 @@
       fd.append('dpi', '144');
       const res = await processFile('/api/pdf-to-png', fd);
       pageImages = res.urls || [];
+      if (tool.id === 'split' && pageImages.length) {
+        parts = [pageImages.map((_, i) => i + 1)];
+        curPart = 0;
+      }
     } catch (e) {
       pageImages = []; // preview is optional; tool still works
     } finally {
@@ -80,10 +84,55 @@
     const s = [...(e.target?.files || [])];
     if (s.length) { files = s; loadPreview(); }
   }
-  function clearFiles() { files = []; result = null; error = ''; pageImages = []; selectedPages = []; rotations = {}; rotateCur = 0; }
+  function clearFiles() { files = []; result = null; error = ''; pageImages = []; selectedPages = []; rotations = {}; rotateCur = 0; parts = []; curPart = 0; dragIdx = null; }
+
+  // --- Merge: drag-drop to reorder the merged files (which file is first) ---
+  let dragIdx = $state(null);
+  function onDropOrder(i) {
+    if (dragIdx === null || dragIdx === i) { dragIdx = null; return; }
+    const arr = [...files];
+    const [m] = arr.splice(dragIdx, 1);
+    arr.splice(i, 0, m);
+    files = arr;
+    dragIdx = null;
+  }
+  // --- Split parts: group pages into custom parts (e.g. 2-page + 1-page) ---
+  let parts = $state([]);        // array of arrays of 1-based page numbers
+  let curPart = $state(0);
+  function newPart() { parts = [...parts, []]; curPart = parts.length - 1; }
+  function toggleToPart(p) {
+    // remove p from every group, then add it to the current (open) group
+    const without = parts.map((g) => g.filter((x) => x !== p));
+    const open = without[curPart] && without[curPart].length ? without[curPart] : (without[curPart] || without[0] || []);
+    open.push(p);
+    open.sort((a, b) => a - b);
+    parts = without;
+    if (without[curPart] && !without[curPart].length) curPart = Math.min(curPart, without.length - 1);
+  }
+  function removePart(g) {
+    if (parts.length <= 1) return;
+    const rest = parts.filter((_, i) => i !== g);
+    parts = rest; curPart = Math.min(curPart, rest.length - 1);
+  }
 
   async function handleProcess() {
     if (!files.length) { error = 'Please select a file first'; return; }
+    // Split "parts" mode: send explicit page groups
+    if (tool.id === 'split' && params.mode === 'parts') {
+      const spec = parts.filter((g) => g.length).map((g) => g.join(',')).join(';');
+      if (!spec) { error = 'Put at least one page in a part'; return; }
+      running = true; error = ''; result = null;
+      try {
+        const fd = new FormData();
+        for (const f of files) fd.append('file', f);
+        fd.append('mode', 'parts');
+        fd.append('parts', spec);
+        const res = await processFile(`/api/${tool.id}`, fd);
+        result = res;
+      } catch (err) { error = err.message; }
+      finally { running = false; }
+      return;
+    }
     // Rotate viewer: build per-page rotation spec "1:90,3:270" from the interactive viewer
     if (cfg.display === 'viewer') {
       const spec = Object.keys(rotations)
@@ -181,11 +230,55 @@
       </div>
 
       {#if files.length}
+        <!-- Merge: drag-drop file order -->
+        {#if tool.id === 'merge' && files.length > 1}
+          <div class="merge-order">
+            <div class="preview-label">Drag files to set merge order (top = first page)</div>
+            {#each files as f, i}
+              <div class="merge-card" draggable="true"
+                ondragstart={() => (dragIdx = i)}
+                ondragover={(e) => e.preventDefault()}
+                ondrop={() => onDropOrder(i)}>
+                <span class="merge-order-idx">{i + 1}</span>
+                <span class="merge-name">{f.name}</span>
+                <span class="merge-grip">⠿</span>
+              </div>
+            {/each}
+          </div>
+        {/if}
+
+        <!-- Split parts builder: group pages into custom parts -->
+        {#if tool.id === 'split' && params.mode === 'parts' && pageImages.length}
+          <div class="parts-builder">
+            <div class="preview-label">Click pages to assign to the active part. Each part becomes one output file.</div>
+            <div class="parts-list">
+              {#each parts as g, gi}
+                <button type="button" class:part-active={curPart === gi} onclick={() => (curPart = gi)}>
+                  Part {gi + 1}: {g.length ? g.join(', ') : 'empty'}
+                  {#if parts.length > 1}
+                    <span class="part-del" onclick={(e) => { e.stopPropagation(); removePart(gi); }}>✕</span>
+                  {/if}
+                </button>
+              {/each}
+              <button type="button" class="part-new" onclick={newPart}>＋ New part</button>
+            </div>
+            <div class="parts-grid">
+              {#each pageImages as url, i}
+                <button type="button" class:part-in={parts.flat().includes(i + 1)} class:part-cur={parts[curPart]?.includes(i + 1)} onclick={() => toggleToPart(i + 1)}>
+                  <img src={url} alt="Page {i + 1}" />
+                  <span class="thumb-label">{i + 1}</span>
+                  {#if parts[curPart]?.includes(i + 1)}<span class="thumb-check">●</span>{/if}
+                </button>
+              {/each}
+            </div>
+          </div>
+        {/if}
+
         <!-- Preview: full-size single-page viewer (rotate) -->
         {#if cfg.display === 'viewer' && pageImages.length}
           <PageViewer images={pageImages} bind:rotations bind:cur={rotateCur} />
         <!-- Preview: large thumbnails (grid / select) -->
-        {:else if cfg.display && (pageImages.length || previewLoading)}
+        {:else if cfg.display && !(tool.id === 'split' && params.mode === 'parts') && (pageImages.length || previewLoading)}
           <div class="preview-section">
             <div class="preview-label">
               {#if cfg.pageSelect}
@@ -348,4 +441,35 @@
   .param-row { display: flex; flex-direction: column; gap: 0.3rem; }
   .param-val { float: right; color: var(--neon-cyan); font-size: 0.72rem; letter-spacing: 0.05em; }
   .param-range { width: 100%; accent-color: var(--neon-cyan); }
+
+  /* Merge drag-order cards */
+  .merge-order { width: 100%; margin-top: 1.25rem; display: flex; flex-direction: column; gap: 0.5rem; }
+  .merge-card {
+    display: flex; align-items: center; gap: 0.75rem; padding: 0.7rem 1rem;
+    background: rgba(0,0,0,0.35); border: 1px solid rgba(0,255,245,0.25); cursor: grab;
+    border-radius: 6px; user-select: none;
+  }
+  .merge-card:active { cursor: grabbing; }
+  .merge-order-idx { width: 22px; height: 22px; border-radius: 50%; background: var(--neon-cyan); color: #000; font-size: 0.7rem; font-weight: bold; display: flex; align-items: center; justify-content: center; }
+  .merge-name { flex: 1; font-size: 0.85rem; color: var(--text); }
+  .merge-grip { color: var(--dim); font-size: 1.1rem; }
+
+  /* Split parts builder */
+  .parts-builder { width: 100%; margin-top: 1.25rem; }
+  .parts-list { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; }
+  .parts-list button {
+    padding: 0.4rem 0.7rem; cursor: pointer; font-family: inherit; font-size: 0.75rem;
+    background: rgba(0,0,0,0.3); border: 1px solid rgba(0,255,245,0.25); color: var(--text); border-radius: 4px;
+  }
+  .parts-list button.part-active { border-color: var(--neon-magenta); color: var(--neon-magenta); }
+  .parts-list button.part-new { border-style: dashed; }
+  .part-del { margin-left: 0.5rem; color: var(--neon-magenta); }
+  .parts-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.7rem;
+  }
+  .parts-grid button {
+    position: relative; padding: 0; border: 2px solid rgba(0,255,245,0.22); background: rgba(0,0,0,0.3); cursor: pointer; overflow: hidden; border-radius: 5px;
+  }
+  .parts-grid button.part-cur { border-color: var(--neon-magenta); box-shadow: 0 0 12px rgba(255,0,255,0.45); }
+  .parts-grid img { width: 100%; display: block; }
 </style>

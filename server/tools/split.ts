@@ -36,13 +36,33 @@ async function writePdf(doc: PDFDocument): Promise<string> {
 /**
  * Split a PDF into multiple documents.
  * @param path absolute PDF path
- * @param mode "split" (ranges -> separate files), "extract" (selected pages -> ONE file), "perpage" (each page -> own file)
+ * @param mode "split" (ranges -> separate files), "extract" (selected pages -> ONE file), "perpage" (each page -> own file), "parts" (explicit groups, `parts` like "1,2;3")
  * @param pages page-range string e.g. "1-3,5,7-9"
+ * @param parts group spec for mode="parts", e.g. "1,2;3" -> first part pages 1-2, second part page 3
  */
-export async function split_pdf(path: string, mode: "split" | "extract" | "perpage", pages: string): Promise<string[]> {
+export async function split_pdf(path: string, mode: "split" | "extract" | "perpage" | "parts", pages: string, parts?: string): Promise<string[]> {
   const bytes = await Bun.file(path).arrayBuffer();
   const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true });
   const total = pdf.getPageCount();
+
+  if (mode === "parts") {
+    if (!parts || !parts.trim()) throw new Error("Provide parts spec like '1,2;3'");
+    const groups: number[][] = [];
+    for (const grp of parts.split(";").map((s) => s.trim())) {
+      if (!grp) continue;
+      groups.push(parseRange(grp, total));
+    }
+    if (groups.length === 0) throw new Error("No parts defined");
+    const outs: string[] = [];
+    for (const idx of groups) {
+      const out = await PDFDocument.create();
+      const copied = await out.copyPages(pdf, idx);
+      for (const p of copied) out.addPage(p);
+      outs.push(await writePdf(out));
+    }
+    return outs;
+  }
+
   const idx = parseRange(pages, total);
   if (idx.length === 0) throw new Error("No pages matched");
 
