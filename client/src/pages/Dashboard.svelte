@@ -33,6 +33,8 @@
   ];
 
   async function doLogout() { await logout(); onLogout(); }
+  let collapsed = $state({});
+  function toggle(name) { collapsed = { ...collapsed, [name]: !collapsed[name] }; }
 </script>
 
 <div class="dash">
@@ -47,25 +49,29 @@
   <main class="groups">
     {#each groups as g}
       <section class="group">
-        <div class="group-head">
+        <button class="group-head" onclick={() => toggle(g.name)} aria-expanded={!collapsed[g.name]}>
+          <span class="chevron">{collapsed[g.name] ? '▸' : '▾'}</span>
           <span class="group-icon">{g.icon}</span>
           <div class="group-title">
             <h2>{g.name}</h2>
             <span class="group-blurb">{g.blurb}</span>
           </div>
-        </div>
-        <div class="tool-grid">
-          {#each g.ids as id}
-            {@const tool = ALL[id]}
-            {#if tool}
-              <button class="tool-card" onclick={() => onSelectTool(tool)}>
-                <span class="tool-icon">{tool.icon}</span>
-                <span class="tool-name">{tool.name}</span>
-                <span class="tool-desc">{tool.desc}</span>
-              </button>
-            {/if}
-          {/each}
-        </div>
+          <span class="group-count">{g.ids.length}</span>
+        </button>
+        {#if !collapsed[g.name]}
+          <div class="tool-grid">
+            {#each g.ids as id}
+              {@const tool = ALL[id]}
+              {#if tool}
+                <button class="tool-card" onclick={() => onSelectTool(tool)}>
+                  <span class="tool-icon">{tool.icon}</span>
+                  <span class="tool-name">{tool.name}</span>
+                  <span class="tool-desc">{tool.desc}</span>
+                </button>
+              {/if}
+            {/each}
+          </div>
+        {/if}
       </section>
     {/each}
   </main>
@@ -89,7 +95,18 @@
   .logout-btn:hover { background: rgba(255,0,255,0.1); box-shadow: 0 0 15px rgba(255,0,255,0.2); }
   .groups { flex: 1; padding: 2rem; max-width: 1240px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 2.5rem; }
   .group { display: flex; flex-direction: column; gap: 1rem; }
-  .group-head { display: flex; align-items: center; gap: 0.9rem; }
+  .group-head {
+    display: flex; align-items: center; gap: 0.9rem; width: 100%;
+    background: none; border: none; padding: 0; margin: 0; cursor: pointer;
+    font-family: inherit; text-align: left;
+  }
+  .group-head:hover .group-title h2 { text-shadow: 0 0 12px rgba(0,255,245,0.3); }
+  .chevron { font-size: 1rem; color: var(--neon-cyan); width: 1rem; transition: transform 0.2s; }
+  .group-count {
+    margin-left: auto; font-size: 0.7rem; color: var(--dim);
+    background: rgba(0,255,245,0.08); border: 1px solid rgba(0,255,245,0.2);
+    padding: 0.2rem 0.6rem; border-radius: 10px;
+  }
   .group-icon { font-size: 1.7rem; }
   .group-title h2 {
     margin: 0; font-size: 1.1rem; letter-spacing: 0.12em; color: var(--neon-cyan);
