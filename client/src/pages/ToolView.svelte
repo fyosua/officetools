@@ -12,9 +12,15 @@
 
   const configs = {
     merge: { label: 'Upload multiple PDFs to merge', accept: '.pdf', multiple: true, params: [] },
-    split: { label: 'Upload a PDF to split', accept: '.pdf', multiple: false, params: [{ key: 'input', label: 'Page range (e.g. 1-3,5,7-9)', placeholder: 'all' }] },
+    split: { label: 'Upload a PDF to split', accept: '.pdf', multiple: false, params: [{ key: 'mode', label: 'Split mode', options: ['split', 'extract', 'perpage'] }, { key: 'pages', label: 'Pages (e.g. 1-3,5,7-9)', placeholder: '1-999' }] },
     compress: { label: 'Upload a PDF to compress', accept: '.pdf', multiple: false, params: [{ key: 'mode', label: 'Compression mode', placeholder: 'ebook (lossy)', options: ['ebook', 'screen', 'printer', 'prepress'] }] },
     'pdf-to-jpg': { label: 'Upload a PDF to convert to images', accept: '.pdf', multiple: false, params: [{ key: 'dpi', label: 'Resolution (DPI)', placeholder: '150' }] },
+    'pdf-to-png': { label: 'Upload a PDF to convert to PNG', accept: '.pdf', multiple: false, params: [{ key: 'dpi', label: 'Resolution (DPI)', placeholder: '150' }] },
+    'delete-pages': { label: 'Upload a PDF to delete pages', accept: '.pdf', multiple: false, params: [{ key: 'pages', label: 'Pages to delete (e.g. 2,5)', placeholder: '2' }] },
+    'office-to-pdf': { label: 'Upload an Office file to convert to PDF', accept: '.docx,.xlsx,.pptx,.odt,.ods,.odp', multiple: false, params: [] },
+    watermark: { label: 'Upload a PDF to watermark', accept: '.pdf', multiple: false, params: [{ key: 'text', label: 'Watermark text', placeholder: 'CONFIDENTIAL' }] },
+    'number-pages': { label: 'Upload a PDF to number pages', accept: '.pdf', multiple: false, params: [{ key: 'start', label: 'Start number', placeholder: '1' }] },
+    crop: { label: 'Upload a PDF to crop', accept: '.pdf', multiple: false, params: [{ key: 'margin', label: 'Crop % per side', placeholder: '10' }] },
     'jpg-to-pdf': { label: 'Upload images to convert to PDF', accept: '.jpg,.jpeg,.png', multiple: true, params: [] },
     'docx-to-pdf': { label: 'Upload a Word document to convert', accept: '.docx', multiple: false, params: [] },
     'pdf-to-docx': { label: 'Upload a PDF to convert to Word', accept: '.pdf', multiple: false, params: [] },
@@ -70,19 +76,20 @@
   <div class="tv-body">
     {#if result}
       <div class="result-section">
-        <p class="result-msg">✅ Processing complete</p>
-        <pre class="result-json">{JSON.stringify(result, null, 2)}</pre>
+        <p class="result-msg">⦿ Processing complete</p>
         <div class="result-actions">
           {#if result.url}
-            <a href={result.url} class="action-btn primary" target="_blank">⬇ DOWNLOAD</a>
+            <a href={result.url} class="action-btn primary" target="_blank" rel="noopener">DOWNLOAD FILE</a>
           {/if}
           {#if result.urls}
-            {#each result.urls as u}
-              <a href={u} class="action-btn primary" target="_blank">⬇ DOWNLOAD PART</a>
-            {/each}
+            <div class="result-files">
+              {#each result.urls as u, i}
+                <a href={u} class="action-btn primary" target="_blank" rel="noopener">PART {i + 1}</a>
+              {/each}
+            </div>
           {/if}
           {#if result.text}
-            <pre class="result-text">{result.text}</pre>
+            <div class="result-text-block"><pre class="result-text">{result.text}</pre></div>
           {/if}
           <button class="action-btn" onclick={clearFiles}>↻ PROCESS ANOTHER</button>
         </div>
@@ -209,7 +216,7 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   .result-section { width: 100%; text-align: center; }
   .result-msg { font-size: 1.1rem; color: #00ff00; margin-bottom: 1rem; text-shadow: 0 0 10px rgba(0,255,0,0.3); }
-  .result-json { background: rgba(0,0,0,0.3); border: 1px solid rgba(0,255,245,0.2); padding: 1rem; font-size: 0.75rem; color: var(--neon-cyan); text-align: left; overflow-x: auto; margin-bottom: 1rem; }
+  .result-files { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center; }
   .result-text { background: rgba(0,0,0,0.3); border: 1px solid rgba(0,255,245,0.2); padding: 1rem; font-size: 0.8rem; color: var(--text); text-align: left; white-space: pre-wrap; margin-bottom: 1rem; max-height: 400px; overflow-y: auto; }
   .result-actions { display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap; }
   .action-btn {

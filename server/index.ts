@@ -10,6 +10,7 @@ import { merge_pdfs } from "./tools/merge";
 import { split_pdf } from "./tools/split";
 import { compress_pdf } from "./tools/compress";
 import { pdf_to_jpg } from "./tools/pdf_to_jpg";
+import { pdf_to_png } from "./tools/pdf_to_png";
 import { images_to_pdf } from "./tools/jpg_to_pdf";
 import { docx_to_pdf } from "./tools/docx_to_pdf";
 import { pdf_to_docx } from "./tools/pdf_to_docx";
@@ -17,16 +18,14 @@ import { rotate_pdf } from "./tools/rotate";
 import { unlock_pdf } from "./tools/unlock";
 import { protect_pdf } from "./tools/protect";
 import { pdf_to_text } from "./tools/pdf_to_text";
+import { delete_pages } from "./tools/delete_pages";
 import { add_text_annotation } from "./tools/pdf_editor";
+import { office_to_pdf } from "./tools/office_to_pdf";
+import { watermark_pdf } from "./tools/watermark";
+import { number_pages } from "./tools/number_pages";
+import { crop_pdf } from "./tools/crop_pdf";
 
 const config = loadConfig();
-
-if (!config.appPassword) {
-  throw new Error("APP_PASSWORD must be set in .env file");
-}
-
-Bun.spawnSync(["mkdir", "-p", `${config.processingDir}/uploads`, `${config.processingDir}/results`]);
-
 const resultsDir = `${config.processingDir}/results`;
 
 async function saveUploadedFile(formData: FormData, field: string = "file"): Promise<string> {
@@ -51,28 +50,25 @@ async function saveUploadedFiles(formData: FormData, field: string = "file"): Pr
   return paths;
 }
 
-function requireAuth({ cookie, set }: { cookie: any; set: any }): void {
-  const session = cookie?.session;
-  if (!session?.value || !verifySession(session.value, config.secretKey)) {
-    set.status = 401;
-    throw new Error("Unauthorized");
-  }
-}
-
 function resultUrl(abspath: string): string {
   const name = abspath.split("/").pop()!;
   return `/api/download/${name}`;
 }
+function resultUrls(paths: string[]): string[] {
+  return paths.map(resultUrl);
+}
+
+Bun.spawnSync(["mkdir", "-p", `${config.processingDir}/uploads`, `${config.processingDir}/results`]);
 
 const app = new Elysia()
   .use(cors())
   .use(cookie())
   .onError(({ code, error, set }) => {
+    if (!set.status) set.status = code === "VALIDATION" ? 400 : 500;
     const msg = error && typeof error === "object" && "message" in error ? (error as any).message : String(error);
-    set.status = code === "VALIDATION" ? 400 : 500;
     return { error: msg || "Internal server error" };
   })
-  // --- Auth ---
+  // --- Auth (optional — tools are public per PRD R1.2; endpoints kept for compatibility) ---
   .post("/api/login", ({ body, cookie, set }) => {
     const session = cookie?.session;
     if (!session) { set.status = 500; return { success: false, message: "Cookie error" }; }
@@ -93,14 +89,9 @@ const app = new Elysia()
     if (s) s.set({ value: "", maxAge: 0, path: "/" });
     return { success: true };
   })
-  .get("/api/health", () => ({ status: "ok", version: "1.0.0" }))
-  // --- Download endpoint ---
-  .get("/api/download/:filename", ({ params: { filename }, cookie, set }: any) => {
-    const s = cookie?.session;
-    if (!verifySession(typeof s?.value === "string" ? s.value : undefined, config.secretKey)) {
-      set.status = 401;
-      return { error: "Unauthorized" };
-    }
+  .get("/api/health", () => ({ status: "ok", version: "1.1.0" }))
+  // --- Download endpoint (public) ---
+  .get("/api/download/:filename", ({ params: { filename }, set }: any) => {
     const filepath = `${resultsDir}/${filename}`;
     const file = Bun.file(filepath);
     if (!file.size) { set.status = 404; return { error: "File not found" }; }
@@ -111,69 +102,90 @@ const app = new Elysia()
       },
     });
   })
-  // --- Tools ---
-  .post("/api/merge", async ({ request, cookie, set }: any) => {
-    requireAuth({ cookie, set });
+  // --- Tools (public) ---
+  .post("/api/merge", async ({ request }: any) => {
     const paths = await saveUploadedFiles(await request.formData(), "file");
     return { url: resultUrl(await merge_pdfs(paths)) };
   })
-  .post("/api/split", async ({ request, cookie, set }: any) => {
-    requireAuth({ cookie, set });
+  .post("/api/split", async ({ request }: any) => {
     const fd = await request.formData();
     const path = await saveUploadedFile(fd, "file");
-    const ranges = (fd.get("input") as string) || "1";
-    const urls = (await split_pdf(path, ranges)).map(resultUrl);
-    return { urls };
+    const mode = (fd.get("mode") as string) || "split";
+    const pages = (fd.get("pages") as string) || (fd.get("input") as string) || "1";
+    return { urls: resultUrls(await split_pdf(path, mode as "split" | "extract" | "perpage", pages)) };
   })
-  .post("/api/compress", async ({ request, cookie, set }: any) => {
-    requireAuth({ cookie, set });
+  .post("/api/compress", async ({ request }: any) => {
     const fd = await request.formData();
     const path = await saveUploadedFile(fd, "file");
     return { url: resultUrl(await compress_pdf(path, (fd.get("mode") as string) || "ebook")) };
   })
-  .post("/api/pdf-to-jpg", async ({ request, cookie, set }: any) => {
-    requireAuth({ cookie, set });
+  .post("/api/pdf-to-jpg", async ({ request }: any) => {
     const fd = await request.formData();
     const path = await saveUploadedFile(fd, "file");
     const dpi = parseInt((fd.get("dpi") as string) || "150", 10);
-    return { url: resultUrl(await pdf_to_jpg(path, dpi)) };
+    return { urls: resultUrls(await pdf_to_jpg(path, dpi)) };
   })
-  .post("/api/jpg-to-pdf", async ({ request, cookie, set }: any) => {
-    requireAuth({ cookie, set });
+  .post("/api/pdf-to-png", async ({ request }: any) => {
+    const fd = await request.formData();
+    const path = await saveUploadedFile(fd, "file");
+    const dpi = parseInt((fd.get("dpi") as string) || "150", 10);
+    return { urls: resultUrls(await pdf_to_png(path, dpi)) };
+  })
+  .post("/api/delete-pages", async ({ request }: any) => {
+    const fd = await request.formData();
+    const path = await saveUploadedFile(fd, "file");
+    return { url: resultUrl(await delete_pages(path, (fd.get("pages") as string) || "")) };
+  })
+  .post("/api/office-to-pdf", async ({ request }: any) => {
+    const fd = await request.formData();
+    const path = await saveUploadedFile(fd, "file");
+    return { url: resultUrl(await office_to_pdf(path)) };
+  })
+  .post("/api/watermark", async ({ request }: any) => {
+    const fd = await request.formData();
+    const path = await saveUploadedFile(fd, "file");
+    return { url: resultUrl(await watermark_pdf(path, (fd.get("text") as string) || "CONFIDENTIAL")) };
+  })
+  .post("/api/number-pages", async ({ request }: any) => {
+    const fd = await request.formData();
+    const path = await saveUploadedFile(fd, "file");
+    const start = parseInt((fd.get("start") as string) || "1", 10);
+    return { url: resultUrl(await number_pages(path, isNaN(start) ? 1 : start)) };
+  })
+  .post("/api/crop", async ({ request }: any) => {
+    const fd = await request.formData();
+    const path = await saveUploadedFile(fd, "file");
+    const margin = parseFloat((fd.get("margin") as string) || "10");
+    return { url: resultUrl(await crop_pdf(path, isNaN(margin) ? 10 : margin)) };
+  })
+  .post("/api/jpg-to-pdf", async ({ request }: any) => {
     const paths = await saveUploadedFiles(await request.formData(), "file");
     return { url: resultUrl(await images_to_pdf(paths)) };
   })
-  .post("/api/docx-to-pdf", async ({ request, cookie, set }: any) => {
-    requireAuth({ cookie, set });
+  .post("/api/docx-to-pdf", async ({ request }: any) => {
     return { url: resultUrl(await docx_to_pdf(await saveUploadedFile(await request.formData(), "file"))) };
   })
-  .post("/api/pdf-to-docx", async ({ request, cookie, set }: any) => {
-    requireAuth({ cookie, set });
+  .post("/api/pdf-to-docx", async ({ request }: any) => {
     return { url: resultUrl(await pdf_to_docx(await saveUploadedFile(await request.formData(), "file"))) };
   })
-  .post("/api/rotate", async ({ request, cookie, set }: any) => {
-    requireAuth({ cookie, set });
+  .post("/api/rotate", async ({ request }: any) => {
     const fd = await request.formData();
     const path = await saveUploadedFile(fd, "file");
     return { url: resultUrl(await rotate_pdf(path, (fd.get("pages") as string) || "all", parseInt((fd.get("angle") as string) || "90", 10))) };
   })
-  .post("/api/unlock", async ({ request, cookie, set }: any) => {
-    requireAuth({ cookie, set });
+  .post("/api/unlock", async ({ request }: any) => {
     const fd = await request.formData();
     return { url: resultUrl(await unlock_pdf(await saveUploadedFile(fd, "file"), (fd.get("password") as string) || "")) };
   })
-  .post("/api/protect", async ({ request, cookie, set }: any) => {
-    requireAuth({ cookie, set });
+  .post("/api/protect", async ({ request }: any) => {
     const fd = await request.formData();
     return { url: resultUrl(await protect_pdf(await saveUploadedFile(fd, "file"), (fd.get("password") as string) || "")) };
   })
-  .post("/api/pdf-to-text", async ({ request, cookie, set }: any) => {
-    requireAuth({ cookie, set });
+  .post("/api/pdf-to-text", async ({ request }: any) => {
     const text = await pdf_to_text(await saveUploadedFile(await request.formData(), "file"));
     return { text };
   })
-  .post("/api/pdf-editor", async ({ request, cookie, set }: any) => {
-    requireAuth({ cookie, set });
+  .post("/api/pdf-editor", async ({ request }: any) => {
     const fd = await request.formData();
     const path = await saveUploadedFile(fd, "file");
     const text = (fd.get("text") as string) || "";

@@ -7,6 +7,7 @@
     { id: 'split', name: 'PDF SPLIT', icon: '◻️', desc: 'Split PDF by page range' },
     { id: 'compress', name: 'PDF COMPRESS', icon: '⬇️', desc: 'Reduce PDF file size' },
     { id: 'pdf-to-jpg', name: 'PDF TO JPG', icon: '🖼️', desc: 'Convert PDF pages to images' },
+    { id: 'pdf-to-png', name: 'PDF TO PNG', icon: '🌄', desc: 'Convert PDF pages to PNG' },
     { id: 'jpg-to-pdf', name: 'JPG TO PDF', icon: '📄', desc: 'Convert images to PDF' },
     { id: 'docx-to-pdf', name: 'DOCX TO PDF', icon: '📝', desc: 'Convert Word to PDF' },
     { id: 'pdf-to-docx', name: 'PDF TO DOCX', icon: '✏️', desc: 'Convert PDF to Word' },
@@ -15,6 +16,11 @@
     { id: 'protect', name: 'PDF PROTECT', icon: '🔒', desc: 'Add password protection' },
     { id: 'pdf-to-text', name: 'PDF TO TEXT', icon: '📃', desc: 'Extract text from PDF' },
     { id: 'pdf-editor', name: 'PDF EDITOR', icon: '🖊️', desc: 'Add text annotations' },
+    { id: 'delete-pages', name: 'DELETE PAGES', icon: '🗑️', desc: 'Remove pages from a PDF' },
+    { id: 'office-to-pdf', name: 'OFFICE TO PDF', icon: '📊', desc: 'Convert Excel/PPT/OpenOffice to PDF' },
+    { id: 'watermark', name: 'WATERMARK', icon: '💧', desc: 'Add a text watermark' },
+    { id: 'number-pages', name: 'NUMBER PAGES', icon: '🔢', desc: 'Add page numbers' },
+    { id: 'crop', name: 'CROP PDF', icon: '✂️', desc: 'Trim page margins' },
   ];
 
   async function doLogout() { await logout(); onLogout(); }
