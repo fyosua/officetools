@@ -159,8 +159,12 @@ const app = new Elysia()
     return { url: resultUrl(await crop_pdf(path, isNaN(margin) ? 10 : margin)) };
   })
   .post("/api/jpg-to-pdf", async ({ request }: any) => {
-    const paths = await saveUploadedFiles(await request.formData(), "file");
-    return { url: resultUrl(await images_to_pdf(paths)) };
+    const fd = await request.formData();
+    const paths = await saveUploadedFiles(fd, "file");
+    const margin = parseFloat((fd.get("margin") as string) || "0");
+    const orientation = (fd.get("orientation") as string) || "auto";
+    const size = (fd.get("size") as string) || "auto";
+    return { url: resultUrl(await images_to_pdf(paths, { margin: isNaN(margin) ? 0 : margin, orientation, size })) };
   })
   .post("/api/docx-to-pdf", async ({ request }: any) => {
     return { url: resultUrl(await docx_to_pdf(await saveUploadedFile(await request.formData(), "file"))) };
