@@ -240,7 +240,15 @@ const app = new Elysia()
     const fd = await request.formData();
     const path = await saveUploadedFile(fd, "file");
     const spec = (fd.get("spec") as string) || "[]";
-    return { url: resultUrl(await annotate_pdf(path, spec)) };
+    // collect any image_<i> fields as bytes for image annotations
+    const imageFiles: (ArrayBuffer | Uint8Array)[] = [];
+    for (const key of fd.keys()) {
+      if (key.startsWith("image_")) {
+        const f = fd.get(key) as File | null;
+        if (f && f.size) imageFiles[parseInt(key.split("_")[1]!, 10)] = await f.arrayBuffer();
+      }
+    }
+    return { url: resultUrl(await annotate_pdf(path, spec, imageFiles)) };
   })
   // --- Static ---
   .use(staticPlugin({ assets: "./client/dist", prefix: "/" }))

@@ -13,14 +13,15 @@ function hexToRgb(hex: string) {
 /**
  * Render annotations onto a PDF. Spec is a JSON array, coordinates normalized 0-1
  * with y from the TOP (CSS-like). Server maps to PDF points (bottom-left origin).
- * Types: text | draw | rect | highlight | underline | sign
+ * Types: text | draw | rect | highlight | underline | sign | image
  *   text: {p,x,y,text,size?,color?}
  *   draw: {p,points:[[nx,ny],...],color?,width?}
  *   rect/highlight: {p,x,y,w,h,color?,opacity?}
  *   underline: {p,x,y,w2,color?}
  *   sign: {p,x,y,text,size?,color?}
+ *   image: {p,x,y,w,imgIdx}  -> embeds imageFiles[imgIdx]
  */
-export async function annotate_pdf(path: string, specJson: string): Promise<string> {
+export async function annotate_pdf(path: string, specJson: string, imageFiles: (ArrayBuffer | Uint8Array)[] = []): Promise<string> {
   if (!specJson || !specJson.trim()) throw new Error("No annotations provided");
   let items: any[];
   try { items = JSON.parse(specJson); } catch { throw new Error("Invalid annotation spec JSON"); }
@@ -61,12 +62,22 @@ export async function annotate_pdf(path: string, specJson: string): Promise<stri
         }
         break;
       }
+      case "image": {
+        const buf = imageFiles[Number(it.imgIdx) ?? 0];
+        if (!buf) throw new Error("Missing image data for image annotation");
+        let img;
+        try { img = await pdf.embedPng(buf); } catch { img = await pdf.embedJpg(buf); }
+        const wPts = (it.w || 0.3) * W;
+        const hPts = (wPts * img.height) / img.width;
+        page.drawImage(img, { x: X(it.x), y: Y(it.y) - hPts, width: wPts, height: hPts });
+        break;
+      }
       case "rect":
       case "highlight":
-        page.drawRectangle({ x: X(it.x), y: Y(it.y) - (it.h || 0.05) * H, width: X(it.w), height: (it.h || 0.05) * H, color, opacity: it.opacity ?? 0.4 });
+        page.drawRectangle({ x: X(it.x), y: Y(it.y) - (Number(it.h) || 0.05) * H, width: X(it.w), height: (Number(it.h) || 0.05) * H, color, opacity: it.opacity ?? 0.4 });
         break;
       case "underline":
-        page.drawLine({ start: { x: X(it.x), y: Y(it.y) }, end: { x: X(it.x) + X(it.w2 || it.w || 0.2), y: Y(it.y) }, thickness: it.width || 2, color });
+        page.drawLine({ start: { x: X(it.x), y: Y(it.y) }, end: { x: X(it.x) + (Number(it.w2) || Number(it.w) || 0.2) * W, y: Y(it.y) }, thickness: Number(it.width) || 2, color });
         break;
       default:
         throw new Error(`Unknown annotation type: ${it.type}`);
