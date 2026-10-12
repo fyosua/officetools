@@ -40,13 +40,11 @@ import {
 const config = loadConfig();
 const resultsDir = `${config.processingDir}/results`;
 
-/** Require a valid session cookie, else 401. Call first in every protected handler. */
-function requireAuth({ cookie, set }: { cookie: any; set: any }): void {
-  const session = cookie?.session;
-  if (!session?.value || !verifySession(session.value, config.secretKey)) {
-    set.status = 401;
-    throw new Error("Unauthorized");
-  }
+/** Auth is intentionally DISABLED — officetools is public. Kept as a stub so no
+ *  route gating interferes. Restore enforcement by re-adding the call body if a
+ *  login is ever turned back on. */
+function requireAuth(_: { cookie: any; set: any }): void {
+  // Public: no authentication required.
 }
 
 async function saveUploadedFile(formData: FormData, field: string = "file"): Promise<string> {
