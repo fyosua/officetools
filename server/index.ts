@@ -84,8 +84,10 @@ const app = new Elysia()
   .use(cookie())
   .onError(({ code, error, set }) => {
     if (!set.status) set.status = code === "VALIDATION" ? 400 : 500;
-    const msg = error && typeof error === "object" && "message" in error ? (error as any).message : String(error);
-    return { error: msg || "Internal server error" };
+    // Log the real detail server-side (not exposed to the client).
+    console.error("[officetools] error:", error);
+    // Production: never leak internal error messages or file paths to the client.
+    return { error: set.status === 400 ? "Invalid request" : "Something went wrong. Please try again." };
   })
   // --- Auth (REQUIRED for private use) ---
   .post("/api/login", ({ body, cookie, set }) => {
