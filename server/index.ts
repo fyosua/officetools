@@ -26,6 +26,16 @@ import { number_pages } from "./tools/number_pages";
 import { crop_pdf } from "./tools/crop_pdf";
 import { organize_pdf } from "./tools/organize_pdf";
 import { annotate_pdf } from "./tools/annotate_pdf";
+import {
+  pdfcraft_rotate,
+  pdfcraft_combine,
+  pdfcraft_split,
+  pdfcraft_annotate,
+  pdfcraft_fill_form,
+  pdfcraft_render,
+  pdfcraft_text,
+  pdfcraft_edit_text,
+} from "./tools/pdfcraft";
 
 const config = loadConfig();
 const resultsDir = `${config.processingDir}/results`;
@@ -249,6 +259,70 @@ const app = new Elysia()
       }
     }
     return { url: resultUrl(await annotate_pdf(path, spec, imageFiles)) };
+  })
+  // --- PdfCraft workbench engine (complementary; routed through low-priv pdfsvc) ---
+  .post("/api/pdfcraft/rotate", async ({ request, cookie, set }: any) => {
+    requireAuth({ cookie, set });
+    const fd = await request.formData();
+    const path = await saveUploadedFile(fd, "file");
+    const pages = ((fd.get("pages") as string) || "").split(",").map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n));
+    const degrees = parseInt((fd.get("degrees") as string) || "90", 10);
+    return await pdfcraft_rotate(path, pages.length ? pages : [1], isNaN(degrees) ? 90 : degrees);
+  })
+  .post("/api/pdfcraft/combine", async ({ request, cookie, set }: any) => {
+    requireAuth({ cookie, set });
+    const fd = await request.formData();
+    const paths = await saveUploadedFiles(fd, "file");
+    if (paths.length < 2) { set.status = 400; return { error: "Combine needs at least 2 files" }; }
+    return await pdfcraft_combine(paths);
+  })
+  .post("/api/pdfcraft/split", async ({ request, cookie, set }: any) => {
+    requireAuth({ cookie, set });
+    const fd = await request.formData();
+    const path = await saveUploadedFile(fd, "file");
+    const mode = (fd.get("mode") as string) || "every";
+    const every = parseInt((fd.get("every") as string) || "1", 10);
+    const before = ((fd.get("before") as string) || "").split(",").map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n));
+    return await pdfcraft_split(path, mode === "every" ? (isNaN(every) ? 1 : every) : undefined, before.length ? before : undefined);
+  })
+  .post("/api/pdfcraft/annotate", async ({ request, cookie, set }: any) => {
+    requireAuth({ cookie, set });
+    const fd = await request.formData();
+    const path = await saveUploadedFile(fd, "file");
+    const type = (fd.get("type") as string) || "highlight";
+    const page = parseInt((fd.get("page") as string) || "1", 10);
+    return await pdfcraft_annotate(path, type, isNaN(page) ? 1 : page, (fd.get("find") as string) || (fd.get("text") as string) || undefined, (fd.get("contents") as string) || undefined, (fd.get("color") as string) || undefined);
+  })
+  .post("/api/pdfcraft/fill-form", async ({ request, cookie, set }: any) => {
+    requireAuth({ cookie, set });
+    const fd = await request.formData();
+    const path = await saveUploadedFile(fd, "file");
+    let values: Record<string, string> = {};
+    try { values = JSON.parse((fd.get("values") as string) || "{}"); } catch { values = {}; }
+    return await pdfcraft_fill_form(path, values);
+  })
+  .post("/api/pdfcraft/render", async ({ request, cookie, set }: any) => {
+    requireAuth({ cookie, set });
+    const fd = await request.formData();
+    const path = await saveUploadedFile(fd, "file");
+    const page = parseInt((fd.get("page") as string) || "1", 10);
+    const dpi = parseInt((fd.get("dpi") as string) || "96", 10);
+    return await pdfcraft_render(path, isNaN(page) ? 1 : page, isNaN(dpi) ? 96 : dpi);
+  })
+  .post("/api/pdfcraft/text", async ({ request, cookie, set }: any) => {
+    requireAuth({ cookie, set });
+    const path = await saveUploadedFile(await request.formData(), "file");
+    return await pdfcraft_text(path);
+  })
+  .post("/api/pdfcraft/edit", async ({ request, cookie, set }: any) => {
+    requireAuth({ cookie, set });
+    const fd = await request.formData();
+    const path = await saveUploadedFile(fd, "file");
+    const page = parseInt((fd.get("page") as string) || "1", 10);
+    const line = (fd.get("line") as string) ? parseInt(fd.get("line") as string, 10) : undefined;
+    const text = (fd.get("text") as string) || "";
+    if (!text) { set.status = 400; return { error: "text is required" }; }
+    return await pdfcraft_edit_text(path, isNaN(page) ? 1 : page, text, line);
   })
   // --- Static ---
   .use(staticPlugin({ assets: "./client/dist", prefix: "/" }))

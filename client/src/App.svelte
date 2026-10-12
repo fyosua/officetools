@@ -5,9 +5,11 @@
   import Login from './pages/Login.svelte';
   import Dashboard from './pages/Dashboard.svelte';
   import ToolView from './pages/ToolView.svelte';
+  import PdfcraftEditor from './pages/PdfcraftEditor.svelte';
 
   let currentView = $state('loading');
   let activeTool = $state(null);
+  let pdfcraftOpen = $state(false);
 
   onMount(async () => {
     try {
@@ -19,6 +21,8 @@
   function handleLogout() { currentView = 'login'; }
   function handleSelectTool(tool) { activeTool = tool; currentView = 'tool'; }
   function handleBack() { activeTool = null; currentView = 'dashboard'; }
+  function openPdfcraft() { pdfcraftOpen = true; currentView = 'pdfcraft'; }
+  function closePdfcraft() { pdfcraftOpen = false; currentView = 'dashboard'; }
 </script>
 
 <main>
@@ -28,7 +32,9 @@
     <Login {handleLogin} />
   {:else if currentView === 'tool' && activeTool}
     <ToolView tool={activeTool} onBack={handleBack} onLogout={handleLogout} />
+  {:else if currentView === 'pdfcraft'}
+    <PdfcraftEditor onBack={closePdfcraft} onLogout={handleLogout} />
   {:else}
-    <Dashboard onSelectTool={handleSelectTool} onLogout={handleLogout} />
+    <Dashboard onSelectTool={handleSelectTool} onLogout={handleLogout} onOpenPdfcraft={openPdfcraft} />
   {/if}
 </main>

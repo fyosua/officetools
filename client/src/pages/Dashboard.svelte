@@ -1,5 +1,5 @@
 <script>
-  let { onSelectTool, onLogout } = $props();
+  let { onSelectTool, onLogout, onOpenPdfcraft } = $props();
   import { logout } from '../lib/auth.js';
 
   const ALL = {
@@ -43,7 +43,12 @@
       <span class="logo">⚡</span>
       <h1>OFFICETOOLS</h1>
     </div>
-    <button class="logout-btn" onclick={doLogout}>EXIT</button>
+    <div class="header-actions">
+      {#if onOpenPdfcraft}
+        <button class="pdfcraft-btn" onclick={onOpenPdfcraft}>✏️ PDF EDITOR (PdfCraft)</button>
+      {/if}
+      <button class="logout-btn" onclick={doLogout}>EXIT</button>
+    </div>
   </header>
 
   <main class="groups">
@@ -86,6 +91,12 @@
   }
   .header-left { display: flex; align-items: center; gap: 0.75rem; }
   .logo { font-size: 1.5rem; }
+  .header-actions { display: flex; align-items: center; gap: 0.75rem; }
+  .pdfcraft-btn {
+    padding: 0.5rem 1rem; background: rgba(0,255,245,0.08); border: 1px solid var(--neon-cyan);
+    color: var(--neon-cyan); font-size: 0.72rem; cursor: pointer; font-family: inherit; letter-spacing: 0.05em;
+  }
+  .pdfcraft-btn:hover { background: rgba(0,255,245,0.18); }
   h1 { margin: 0; font-size: 1.2rem; letter-spacing: 0.25em; color: var(--neon-cyan); text-shadow: 0 0 15px rgba(0,255,245,0.3); }
   .logout-btn {
     padding: 0.5rem 1rem; background: transparent; border: 1px solid var(--neon-magenta);
