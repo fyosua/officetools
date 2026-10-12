@@ -4,6 +4,8 @@ export interface AppConfig {
   maxFileSizeMB: number;
   processingDir: string;
   port: number;
+  /** Directory holding the full PDFCraft static export (served app-behind-login at /pdfcraft). */
+  pdfcraftDir: string;
 }
 
 export function loadConfig(): AppConfig {
@@ -13,5 +15,6 @@ export function loadConfig(): AppConfig {
     maxFileSizeMB: parseInt(Bun.env.MAX_FILE_SIZE_MB || "50"),
     processingDir: Bun.env.PROCESSING_DIR || "./processing",
     port: parseInt(Bun.env.PORT || "3002"),
+    pdfcraftDir: Bun.env.PDFCRAFT_DIR || "/home/clowniiizzz/officetools-pdfcraft/out",
   };
 }

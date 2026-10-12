@@ -324,6 +324,33 @@ const app = new Elysia()
     if (!text) { set.status = 400; return { error: "text is required" }; }
     return await pdfcraft_edit_text(path, isNaN(page) ? 1 : page, text, line);
   })
+  // --- PdfCraft full toolkit (embedded static app, behind the same login lock) ---
+  .get("/pdfcraft/*", async ({ request, cookie, set }: any) => {
+    requireAuth({ cookie, set });
+    // Derive the relative path directly from the URL (avoids Elysia/memoirist wildcard-param conflicts).
+    const url = new URL(request.url);
+    let file = decodeURIComponent(url.pathname).replace(/^\/pdfcraft\/?/, "");
+    // Resolve relative to the PDFCraft static export; collapse `..` to prevent traversal.
+    const clean = file.split("/").filter((p: string) => p && p !== "." && p !== "..").join("/");
+    let rel = clean || "index.html";
+    let f = Bun.file(`${config.pdfcraftDir}/${rel}`);
+    if (!(await f.exists())) {
+      rel = rel.endsWith("/") ? rel + "index.html" : rel + "/index.html";
+      f = Bun.file(`${config.pdfcraftDir}/${rel}`);
+    }
+    if (await f.exists()) {
+      return new Response(f, {
+        headers: {
+          "X-Content-Type-Options": "nosniff",
+          // Cross-origin isolation for SharedArrayBuffer tools (LibreOffice WASM, pdf.js).
+          "Cross-Origin-Opener-Policy": "same-origin",
+          "Cross-Origin-Embedder-Policy": "require-corp",
+        },
+      });
+    }
+    set.status = 404;
+    return { error: "Not found" };
+  })
   // --- Static ---
   .use(staticPlugin({ assets: "./client/dist", prefix: "/" }))
   .get("/", () => new Response(Bun.file("./client/dist/index.html"), { headers: { "Content-Type": "text/html" } }))
