@@ -5,11 +5,12 @@
   import Login from './pages/Login.svelte';
   import Dashboard from './pages/Dashboard.svelte';
   import ToolView from './pages/ToolView.svelte';
-  import PdfcraftEditor from './pages/PdfcraftEditor.svelte';
+  // PdfcraftEditor.svelte (thin CLI form) is RETIRED as the user-facing editor path.
+  // The white-labeled OfficeTools PDF toolkit (server :3010, AGPL fork) is the editor.
+  // The component file is kept on disk for reference only.
 
   let currentView = $state('loading');
   let activeTool = $state(null);
-  let pdfcraftOpen = $state(false);
 
   onMount(async () => {
     try {
@@ -21,8 +22,12 @@
   function handleLogout() { currentView = 'login'; }
   function handleSelectTool(tool) { activeTool = tool; currentView = 'tool'; }
   function handleBack() { activeTool = null; currentView = 'dashboard'; }
-  function openPdfcraft() { pdfcraftOpen = true; currentView = 'pdfcraft'; }
-  function closePdfcraft() { pdfcraftOpen = false; currentView = 'dashboard'; }
+  // Open the white-labeled OfficeTools PDF toolkit in a new tab (client-side, no upload).
+  const PDF_TOOLKIT_PORT = 3010;
+  function openPdfcraft() {
+    const proto = window.location.protocol === 'https:' ? 'https' : 'http';
+    window.open(`${proto}://${window.location.hostname}:${PDF_TOOLKIT_PORT}/en`, '_blank', 'noopener');
+  }
 </script>
 
 <main>
@@ -32,8 +37,6 @@
     <Login {handleLogin} />
   {:else if currentView === 'tool' && activeTool}
     <ToolView tool={activeTool} onBack={handleBack} onLogout={handleLogout} />
-  {:else if currentView === 'pdfcraft'}
-    <PdfcraftEditor onBack={closePdfcraft} onLogout={handleLogout} />
   {:else}
     <Dashboard onSelectTool={handleSelectTool} onLogout={handleLogout} onOpenPdfcraft={openPdfcraft} />
   {/if}

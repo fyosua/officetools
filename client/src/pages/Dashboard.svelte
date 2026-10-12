@@ -45,7 +45,7 @@
     </div>
     <div class="header-actions">
       {#if onOpenPdfcraft}
-        <button class="pdfcraft-btn" onclick={onOpenPdfcraft}>✏️ PDF EDITOR (PdfCraft)</button>
+        <button class="pdfcraft-btn" onclick={onOpenPdfcraft}>✏️ PDF EDITOR</button>
       {/if}
       <button class="logout-btn" onclick={doLogout}>EXIT</button>
     </div>
